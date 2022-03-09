@@ -833,8 +833,22 @@ SquidLogParser::getErrorText() const
 
 /*!
  * \internal
+ *
+ * \note The constants below are defined in CMakeLists.txt
+ *
+ * DEBUG_PARSER_SQUID
+ * DEBUG_PARSER_COMMON
+ * DEBUG_PARSER_COMBINED
+ * DEBUG_PARSER_REFERRER
+ * DEBUG_PARSER_USERAGENT
+ *
+ */
+
+/*!
+ * \internal
  * \brief SquidLogParser::parserSquid
  * \return
+ *
  */
 SquidLogData::SLPError
 SquidLogParser::parserSquid()
@@ -1416,10 +1430,10 @@ SLPQuery::sumResponseTime() const
  *
  * \return ReqMethods_t Public structure
  */
-SLPQuery::ReqMethods_t
+SLPQuery::accReqMethods_t
 SLPQuery::countByReqMethod() const
 {
-  ReqMethods_t rm_t_ = {};
+  accReqMethods_t rm_t_ = {};
 
   std::for_each(
     mSubset_.cbegin(),

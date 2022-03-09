@@ -65,19 +65,15 @@
 #include <ctime>
 //#include <fstream>
 #include <arpa/inet.h> // inet_pton()
-//#include <execution>
-//#include <future>
-#include <iomanip> // std::setw()
+#include <iomanip>     // std::setw()
 #include <iostream>
 #include <iterator> // std::back_inserter() ...
 #include <map>
-//#include <mutex>
 #include <numeric> // accumulate
 #include <regex>
 #include <set>
 #include <string>
 #include <string_view>
-//#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -278,7 +274,6 @@ struct SquidLogParser_EXPORT SquidLogData
   };
 
   // --------------------------------------------------------------------------
-
   enum class Compare
   {
     EQ = 0x00,
@@ -290,6 +285,13 @@ struct SquidLogParser_EXPORT SquidLogData
     BTWAND,
     BTWOR,
     REGEX
+  };
+
+  // --------------------------------------------------------------------------
+  enum class FormatDB
+  {
+    UniqueField = 0x00,
+    SepFields
   };
 
   // --------------------------------------------------------------------------
@@ -394,6 +396,7 @@ struct SquidLogParser_EXPORT SquidLogData
  */
 class SquidLogParser_EXPORT DataKey
 {
+private:
   using ipaddr_t = uint32_t;
   using timestamp_t = uint32_t;
 
@@ -556,7 +559,7 @@ public:
   long sumTotalSizeReply() const;
   long sumResponseTime() const;
 
-  struct ReqMethods_t
+  struct accReqMethods_t
   {
     int Get;
     int Put;
@@ -569,7 +572,7 @@ public:
     int Trace;
     int Others;
   };
-  ReqMethods_t countByReqMethod() const;
+  accReqMethods_t countByReqMethod() const;
 
   inline std::string MethodText(MethodType mt_) const;
 

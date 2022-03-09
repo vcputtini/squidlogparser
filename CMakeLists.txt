@@ -14,11 +14,12 @@ add_definitions("-Wall -Wextra -pedantic")
 # Important: Only activate these macros for testing. In production environment
 # they must be disabled.
 
-add_definitions("-DDEBUG_PARSER_SQUID")
-add_definitions("-DDEBUG_PARSER_COMMON")
-add_definitions("-DDEBUG_PARSER_COMBINED")
-add_definitions("-DDEBUG_PARSER_REFERRER")
-add_definitions("-DDEBUG_PARSER_USERAGENT")
+# Uncomment to activate.
+#add_definitions("-DDEBUG_PARSER_SQUID")
+#add_definitions("-DDEBUG_PARSER_COMMON")
+#add_definitions("-DDEBUG_PARSER_COMBINED")
+#add_definitions("-DDEBUG_PARSER_REFERRER")
+#add_definitions("-DDEBUG_PARSER_USERAGENT")
 
 file(WRITE "${CMAKE_SOURCE_DIR}/QtCreatorDeployment.txt" "<deployment/prefix>\n")
 
@@ -39,6 +40,6 @@ set_target_properties(squidlogparser PROPERTIES PUBLIC_HEADER squidlogparser.h)
 target_link_libraries(squidlogparser PRIVATE -ltinyxml2 -lpthread)
 target_compile_definitions(squidlogparser PRIVATE squidlogparser_LIBRARY)
 
-# Uncomment to install
+# Uncomment to install (root)
 #install(TARGETS squidlogparser DESTINATION /lib64)
 #install(FILES squidlogparser.h DESTINATION /usr/include)
