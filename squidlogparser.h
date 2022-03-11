@@ -580,7 +580,7 @@ public:
   void clear();
 
 protected:
-  std::multimap<DataKey, DataSet_Squid> mSubset_ = {};
+  std::multimap<DataKey, DataSet_Squid> mSubset_;
 
 private:
   LogFormat logFmt_;

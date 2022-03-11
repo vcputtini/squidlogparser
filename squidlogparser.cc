@@ -491,7 +491,7 @@ SquidLogParser::isMonth(const std::string&& s_)
   auto begin_ = std::cbegin(nmonths_);
   auto end_ = std::cend(nmonths_);
 
-  auto f_ = std::find_if(begin_, end_, [&s_](const char* cptr_) {
+  const auto f_ = std::find_if(begin_, end_, [&s_](const char* cptr_) {
     if (std::strcmp(s_.c_str(), cptr_) == 0) {
       return true;
     }
@@ -513,7 +513,7 @@ SquidLogParser::monthToNumber(const std::string&& s_) const
   auto begin_ = std::cbegin(nmonths_);
   auto end_ = std::cend(nmonths_);
 
-  auto f_ = std::find_if(begin_, end_, [&s_](const char* cptr_) {
+  const auto f_ = std::find_if(begin_, end_, [&s_](const char* cptr_) {
     if (std::strcmp(s_.c_str(), cptr_) == 0) {
       return true;
     }
@@ -821,9 +821,7 @@ SquidLogParser::errorNum() const noexcept
 std::string
 SquidLogParser::getErrorText() const
 {
-  std::map<SLPError, const std::string>::const_iterator it_ =
-    mError.find(slpError_);
-  if (it_ != mError.end()) {
+  if (const auto it_(mError.find(slpError_)); it_ != mError.end()) {
     return it_->second;
   }
   return mError.at(SLPError::SLP_ERR_UNKNOWN);
@@ -1185,8 +1183,18 @@ SLPQuery::SLPQuery(SquidLogParser* obj_)
   : SquidLogParser(*obj_)
   , mSubset_({})
   , slpError_(SLPError::SLP_SUCCESS)
+  , info_t({})
 {}
 
+/*!
+ * \brief Selects the records given the following arguments: Being date, begin
+ * IP, end date and end IP.
+ * \param d0_  Begin date. Format: dd/Mmm/yyyy:hh:mm:ss
+ * \param ip0_ Being IP address.
+ * \param d1_  End date. Format: dd/Mmm/yyyy:hh:mm:ss
+ * \param ip1_ Ende IP address.
+ * \return *this
+ */
 SLPQuery&
 SLPQuery::select(const std::string&& d0_,
                  const std::string&& ip0_,
@@ -1198,9 +1206,7 @@ SLPQuery::select(const std::string&& d0_,
     info_t.begin_date_ = unixTimestamp(d0_);
     info_t.begin_ip_ = addrToNumeric(ip0_);
     if (info_t.begin_date_ > 0 && info_t.begin_ip_ > 0) {
-      info_t.begin_date_ = unixTimestamp(d0_);
       info_t.end_date_ = info_t.begin_date_;
-      info_t.begin_ip_ = addrToNumeric(ip0_);
       info_t.end_ip_ = info_t.begin_ip_;
       setError(SLPError::SLP_SUCCESS);
       info_t.flag_ = true;
@@ -1230,6 +1236,13 @@ SLPQuery::select(const std::string&& d0_,
   return *this;
 }
 
+/*!
+ * \brief Tells the select() function which field should be used as a
+ * conditional key for searching.
+ * \param fld_ enum Fields.
+ * \param cmp_ enum Compare.
+ * \param t_ Value to compare.
+ */
 void
 SLPQuery::field(Fields fld_, Compare cmp_, Visitor::var_t&& t_)
 {
@@ -1458,7 +1471,6 @@ SLPQuery::countByReqMethod() const
       } else if (d_.second.reqMethod == MethodText(MethodType::MTTrace)) {
         ++rm_t_.Trace;
       } else {
-        std::cout << d_.second.reqMethod << "\n";
         ++rm_t_.Others;
       }
     });
@@ -1490,7 +1502,7 @@ SLPQuery::size() const
 void
 SLPQuery::clear()
 {
-  return mSubset_.clear();
+  mSubset_.clear();
 }
 
 /* SPLRawToXML-------------------------------------------------------------- */
