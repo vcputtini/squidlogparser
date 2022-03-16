@@ -274,6 +274,81 @@ struct SquidLogParser_EXPORT SquidLogData
   };
 
   // --------------------------------------------------------------------------
+
+  std::map<short, int> HttpCodesUniques_m;
+  std::map<const short, const std::string> HttpCodesText_m = {
+    // INFORMATIVE RESPONSES
+    { 100, "Continue" },
+    { 101, "Switching Protocol" },
+    { 102, "Processing (WebDAV)" },
+    { 103, "Early Hints" },
+
+    // SUCCESS_RESPONSES
+    { 200, "OK" },
+    { 201, "Created" },
+    { 202, "Accepted" },
+    { 203, "Non-Authoritative Information" },
+    { 204, "No Content" },
+    { 205, "Reset Content" },
+    { 206, "Partial Content" },
+    { 207, "Multi-Status (WebDAV)" },
+    { 208, "Multi-Status (WebDAV)" },
+    { 226, "IM Used (HTTP Delta encoding" },
+
+    // REDIRECT MESSAGES
+    { 300, "Multiple Choice" },
+    { 301, "Moved Permanently" },
+    { 302, "Found" },
+    { 303, "See Other" },
+    { 304, "Not Modified" },
+    { 307, "Temporary Redirect" },
+    { 308, "Permanent Redirect" },
+
+    // CUSTM_ERROR_RESPONSES
+    { 400, "Bad Request" },
+    { 401, "Unauthorized" },
+    { 402, "Payment Required" },
+    { 403, "Forbidden" },
+    { 405, "Method Not Allowed" },
+    { 406, "Not Acceptable" },
+    { 404, "Not Found" },
+    { 407, "Proxy Authentication Required" },
+    { 408, "Request Timeout" },
+    { 410, "Gone" },
+    { 409, "Conflict" },
+    { 411, "Length Required" },
+    { 412, "Precondition Failed" },
+    { 413, "Payload Too Large" },
+    { 414, "URI Too Long" },
+    { 416, "Requested Range Not Satisfiable" },
+    { 415, "Unsupported Media Type" },
+    { 417, "Expectation Failed" },
+    { 418, "I'm a teapot" },
+    { 421, "Misdirected Request" },
+    { 422, "Unprocessable Entity (WebDAV)" },
+    { 423, "Locked (WebDAV)" },
+    { 424, "Failed Dependency (WebDAV)" },
+    { 425, "Too Early" },
+    { 426, "Upgrade Required" },
+    { 428, "Precondition Required" },
+    { 429, "Too Many Requests" },
+    { 431, "Request Header Fields Too Large" },
+    { 451, "Unavailable For Legal Reasons" },
+
+    // SERVER_ERROR_RESPONSES
+    { 500, "Internal Server Error" },
+    { 501, "Not Implemented" },
+    { 502, "Bad Gateway" },
+    { 503, "Service Unavailable" },
+    { 504, "Gateway Timeout" },
+    { 505, "HTTP Version Not Supported" },
+    { 506, "Variant Also Negotiates" },
+    { 507, "Insufficient Storage" },
+    { 508, "Not Extended" },
+    { 511, "Network Authentication Required" }
+  };
+
+  // --------------------------------------------------------------------------
   enum class Compare
   {
     EQ = 0x00,
@@ -460,12 +535,23 @@ public:
 
   static constexpr std::string_view invalidText = "@@@"; // Don't change!
 
+  // teste apenas
+  void printuniq()
+  {
+    for (auto a : HttpCodesUniques_m) {
+      std::cout << "-> " << a.first << " : " << a.second << "\n";
+    }
+  }
+
 protected:
   SLPError slpError_ = SLPError::SLP_SUCCESS;
 
   std::multimap<DataKey, DataSet_Squid> mEntry;
 
-  static std::string toLower(const std::string s_);
+  template<typename TString = std::string, typename TSize = size_t>
+  TString toLower(TString s_, TSize sz_ = 0);
+
+  std::string strRight(const std::string src_, const char sep_) const;
 
   bool isMonth(const std::string&& s_);
   int monthToNumber(const std::string&& s_) const;
@@ -573,6 +659,8 @@ public:
     int Others;
   };
   accReqMethods_t countByReqMethod() const;
+
+  void countByHttpCodes();
 
   inline std::string MethodText(MethodType mt_) const;
 

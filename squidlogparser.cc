@@ -466,16 +466,36 @@ SquidLogParser::toXML(const std::string&& fn_,
  * \param s_ Text with (maybe) uppercase  characteres.
  * \return Text in lowercase.
  */
-std::string
-SquidLogParser::toLower(const std::string s_)
+template<typename TString = std::string, typename TSize = size_t>
+TString
+toLower(TString s_, TSize sz_)
 {
-  std::string t_(std::move(s_));
-  std::transform(t_.cbegin(), t_.cend(), t_.begin(), [](u_char c) {
-    return std::tolower(c);
-  });
-  return t_;
+  if (sz_ != s_.size()) {
+    s_[sz_] = ::tolower(s_[sz_]);
+    s_ = toLower(s_, ++sz_);
+  }
+  return s_;
 }
 
+/*!
+ * \brief Returns the right part of string until the end. From position+1 of
+ * the informed separator.
+ *
+ * \param src_
+ * \param sep_
+ * \return std::string
+ *
+ * \example std::string s_ = strRight("NONE/200"s,'/'); // s_ = "200";
+ *
+ */
+std::string
+SquidLogParser::strRight(const std::string src_, const char sep_) const
+{
+  if (size_t f = std::string_view{ src_ }.find(sep_); f != std::string::npos) {
+    return src_.substr(f + 1, src_.length());
+  }
+  return std::string();
+}
 /*!
  * \internal
  * \brief Returns true or false if month name is corret
@@ -883,6 +903,11 @@ SquidLogParser::parserSquid()
     ds_squid_.hierStatusIpAddress = std::move(match[9]);
     ds_squid_.mimeTypeContent = std::move(match[10]);
 
+    // stores unique http request codes for later score.
+    HttpCodesUniques_m.insert(
+      { std::stoi(std::move(strRight(ds_squid_.reqStatusHierStatus, '/'))),
+        0 });
+
 #ifdef DEBUG_PARSER_SQUID
     std::cout << "ds_squid :\n";
     std::cout << ds_squid_.timeStamp << "\n"
@@ -948,6 +973,11 @@ SquidLogParser::parserCommon()
     ds_squid_.httpStatus = std::move(std::stoi(match[8]));
     ds_squid_.totalSizeReply = std::move(std::stoi(match[9]));
     ds_squid_.reqStatusHierStatus = std::move(match[10]);
+
+    // stores unique http request codes for later score.
+    HttpCodesUniques_m.insert(
+      { std::stoi(std::move(strRight(ds_squid_.reqStatusHierStatus, '/'))),
+        0 });
 
 #ifdef DEBUG_PARSER_COMMON
     std::cout << "ds_common :\n";
@@ -1016,6 +1046,11 @@ SquidLogParser::parserCombined()
     ds_squid_.referrer = std::move(match[10]);
     ds_squid_.userAgent = std::move(match[11]);
     ds_squid_.reqStatusHierStatus = std::move(match[12]);
+
+    // stores unique http request codes for later score.
+    HttpCodesUniques_m.insert(
+      { std::stoi(std::move(strRight(ds_squid_.reqStatusHierStatus, '/'))),
+        0 });
 
 #ifdef DEBUG_PARSER_COMBINED
     std::cout << "ds_combined :\n";
@@ -1253,7 +1288,7 @@ SLPQuery::field(Fields fld_, Compare cmp_, Visitor::var_t&& t_)
     uint32_t ip1_ = std::move(info_t.end_ip_);
 
     auto procRegex_ = [*this, &min_, &max_, &ip0_, &ip1_, &fld_, &t_](
-                        const std::pair<DataKey, DataSet_Squid> it_) {
+                        const std::pair<DataKey, DataSet_Squid>& it_) {
       if ((it_.first.getTs() >= min_) && (it_.first.getTs() <= max_) &&
           (it_.first.getIp() >= ip0_) && (it_.first.getIp() <= ip1_)) {
         Visitor::TypeVar tv_ = varType(t_);
@@ -1276,7 +1311,7 @@ SLPQuery::field(Fields fld_, Compare cmp_, Visitor::var_t&& t_)
     };
 
     auto procTypes_ = [*this, &min_, &max_, &ip0_, &ip1_, &fld_, &cmp_, &t_](
-                        const std::pair<DataKey, DataSet_Squid> it_) {
+                        const std::pair<DataKey, DataSet_Squid>& it_) {
       if ((it_.first.getTs() >= min_) && (it_.first.getTs() <= max_) &&
           (it_.first.getIp() >= ip0_) && (it_.first.getIp() <= ip1_)) {
         Visitor::TypeVar tv_ = varType(t_);
@@ -1335,7 +1370,7 @@ SLPQuery::getInt(const std::string&& ts_,
   std::for_each(
     mSubset_.cbegin(),
     mSubset_.cend(),
-    [this, &fld_, &dk_, &v_](const std::pair<DataKey, DataSet_Squid> it_) {
+    [this, &fld_, &dk_, &v_](const std::pair<DataKey, DataSet_Squid>& it_) {
       if ((it_.first.getTs() == dk_.getTs()) &&
           (it_.first.getIp() == dk_.getIp())) {
         v_.push_back(std::move(intFields(fld_, it_.second)));
@@ -1364,7 +1399,7 @@ SLPQuery::getUInt(const std::string&& ts_,
   std::for_each(
     mSubset_.cbegin(),
     mSubset_.cend(),
-    [this, &fld_, &dk_, &v_](const std::pair<DataKey, DataSet_Squid> it_) {
+    [this, &fld_, &dk_, &v_](const std::pair<DataKey, DataSet_Squid>& it_) {
       if ((it_.first.getTs() == dk_.getTs()) &&
           (it_.first.getIp() == dk_.getIp())) {
         v_.push_back(std::move(uint32Fields(fld_, it_.second)));
@@ -1393,7 +1428,7 @@ SLPQuery::getStr(const std::string&& ts_,
   std::for_each(
     mSubset_.cbegin(),
     mSubset_.cend(),
-    [this, &fld_, &dk_, &v_](const std::pair<DataKey, DataSet_Squid> it_) {
+    [this, &fld_, &dk_, &v_](const std::pair<DataKey, DataSet_Squid>& it_) {
       if ((it_.first.getTs() == dk_.getTs()) &&
           (it_.first.getIp() == dk_.getIp())) {
         v_.push_back(strFields(fld_, it_.second));
@@ -1415,7 +1450,7 @@ SLPQuery::sumTotalSizeReply() const
     mSubset_.cbegin(),
     mSubset_.cend(),
     0,
-    [](long sum_, const std::pair<DataKey, DataSet_Squid> d_) {
+    [](long sum_, const std::pair<DataKey, DataSet_Squid>& d_) {
       return sum_ + d_.second.totalSizeReply;
     });
 }
@@ -1432,7 +1467,7 @@ SLPQuery::sumResponseTime() const
     mSubset_.cbegin(),
     mSubset_.cend(),
     0,
-    [](long sum_, const std::pair<DataKey, DataSet_Squid> d_) {
+    [](long sum_, const std::pair<DataKey, DataSet_Squid>& d_) {
       return sum_ + d_.second.responseTime;
     });
 }
@@ -1446,12 +1481,13 @@ SLPQuery::sumResponseTime() const
 SLPQuery::accReqMethods_t
 SLPQuery::countByReqMethod() const
 {
+
   accReqMethods_t rm_t_ = {};
 
   std::for_each(
     mSubset_.cbegin(),
     mSubset_.cend(),
-    [this, &rm_t_](const std::pair<DataKey, DataSet_Squid> d_) {
+    [this, &rm_t_](const std::pair<DataKey, DataSet_Squid>& d_) {
       if (d_.second.reqMethod == MethodText(MethodType::MTGet)) {
         ++rm_t_.Get;
       } else if (d_.second.reqMethod == MethodText(MethodType::MTPut)) {
@@ -1474,8 +1510,28 @@ SLPQuery::countByReqMethod() const
         ++rm_t_.Others;
       }
     });
-
   return rm_t_;
+}
+
+/*!
+ * \brief SLPQuery::countByHttpCodes
+ */
+void
+SLPQuery::countByHttpCodes()
+{
+  if (HttpCodesUniques_m.size() > 0) {
+
+    std::for_each(mSubset_.cbegin(),
+                  mSubset_.cend(),
+                  [this](const std::pair<DataKey, DataSet_Squid>& d_) {
+                    short i_ = std::move(
+                      std::stoi(strRight(d_.second.reqStatusHierStatus, '/')));
+                    if (const auto it_ = HttpCodesUniques_m.find(i_);
+                        it_ != HttpCodesUniques_m.end()) {
+                      HttpCodesUniques_m[i_] += 1;
+                    }
+                  });
+  }
 }
 
 /*!
