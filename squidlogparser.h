@@ -56,6 +56,7 @@
 #define SQUIDLOGPARSER_H
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <climits> // INT_MAX, LONG_MAX, UINT_MAX, ...
 #include <cmath>   // std::isless(), std::isgreater(), ...
@@ -131,7 +132,7 @@ private:
   std::string str_ = {};
   uint32_t num_ = 0UL;
 
-  static void splitP(std::vector<std::string>& v_, const std::string src_);
+  static void splitP(std::array<std::string, 4>& arr_, const std::string src_);
 };
 
 /* ------------------------------------------------------------------------- */
@@ -718,6 +719,7 @@ private:
 
   std::string localTime() const;
   void writePart();
+  SLPError normFn(std::string& fn_);
 };
 
 /* ------------------------------------------------------------------------- */

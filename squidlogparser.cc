@@ -114,16 +114,19 @@ IPv4Addr::operator!=(const IPv4Addr& rhs_) const
 /**
  * \internal
  * \brief IPv4Addr::splitP Private member to internal use only.
- * \param v std::vector<std::string> with tokens
+ * \param arr_ std::array<std::string,4> with tokens
  * \param src String to be splited
+ *
  */
 void
-IPv4Addr::splitP(std::vector<std::string>& v_, const std::string src_)
+IPv4Addr::splitP(std::array<std::string, 4>& arr_, const std::string src_)
 {
   std::stringstream ss_(src_);
   std::string tok_ = {};
+  int8_t i = 0;
   while (std::getline(ss_, tok_, '.')) {
-    v_.push_back(tok_);
+    arr_[i] = std::move(tok_);
+    ++i;
   }
 }
 
@@ -152,10 +155,10 @@ uint32_t
 IPv4Addr::iptol(const std::string addr)
 {
   if (isValid(addr)) {
-    std::vector<std::string> v;
-    IPv4Addr::splitP(v, addr);
-    return (std::stol(v[0]) << 24) | (std::stol(v[1]) << 16) |
-           (std::stol(v[2]) << 8) | std::stol(v[3]);
+    std::array<std::string, 4> a_;
+    IPv4Addr::splitP(a_, addr);
+    return (std::stol(a_[0]) << 24) | (std::stol(a_[1]) << 16) |
+           (std::stol(a_[2]) << 8) | std::stol(a_[3]);
   }
   return 0UL;
 }
@@ -177,9 +180,11 @@ IPv4Addr::ltoip(uint32_t addr)
   return ss.str();
 }
 
-/* -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+ */
 
-/* Visitor ------------------------------------------------------------------ */
+/* Visitor ------------------------------------------------------------------
+ */
 /*!
  * \internal
  * \brief After deducing the type of data stored in the var_t structure, it
@@ -203,7 +208,8 @@ Visitor::varType(var_t t_) const
   return typevar_;
 }
 
-/* SquidLogParser ----------------------------------------------------------- */
+/* SquidLogParser -----------------------------------------------------------
+ */
 SquidLogParser::SquidLogParser(LogFormat log_fmt_)
   : re_id_fmt_squid_(cp_id_fmt_squid_)
   , re_id_fmt_common_(cp_id_fmt_common_)
@@ -407,8 +413,8 @@ SquidLogParser::unixToSquidDate(std::time_t uts_) const
  * \param End time
  *
  * \note If the user does not inform the '.xml' extension, the library will
- * provide it. If another extension is informed, it will not be considered valid
- * and the function will return -1.
+ * provide it. If another extension is informed, it will not be considered
+ * valid and the function will return -1.
  *
  * \warning Important: The SLPRawToXML object will always erase the data read
  * after writing the XML file.
@@ -459,7 +465,8 @@ SquidLogParser::toXML(const std::string&& fn_,
   return SLPError::SLP_SUCCESS;
 }
 
-/* protected---------------------------------------------------------------- */
+/* protected----------------------------------------------------------------
+ */
 /*!
  * \internal
  * \brief Simple uppercase to lowercase characters conversion.
@@ -847,7 +854,8 @@ SquidLogParser::getErrorText() const
   return mError.at(SLPError::SLP_ERR_UNKNOWN);
 }
 
-/* private------------------------------------------------------------------ */
+/* private------------------------------------------------------------------
+ */
 
 /*!
  * \internal
@@ -1561,7 +1569,8 @@ SLPQuery::clear()
   mSubset_.clear();
 }
 
-/* SPLRawToXML-------------------------------------------------------------- */
+/* SPLRawToXML--------------------------------------------------------------
+ */
 /*!
  * \internal
  * \brief Constructs a PFRawToXML object.
@@ -1597,22 +1606,27 @@ SquidLogParser::SLPError
 SLPRawToXML::save(const std::string fn_)
 {
   constexpr const auto whatFormat = [](LogFormat f_) {
-    if (f_ == LogFormat::Squid) {
-      return "Squid";
-    } else if (f_ == LogFormat::Common) {
-      return "Common";
-    } else if (f_ == LogFormat::Combined) {
-      return "Combined";
-    } else if (f_ == LogFormat::Referrer) {
-      return "Referrer";
-    } else if (f_ == LogFormat::UserAgent) {
-      return "UserAgent";
+    switch (f_) {
+      case LogFormat::Squid:
+        return "Squid";
+      case LogFormat::Common:
+        return "Common";
+      case LogFormat::Combined:
+        return "Combined";
+      case LogFormat::Referrer:
+        return "Referrer";
+      case LogFormat::UserAgent:
+        return "UserAgent";
+      default:
+        return "None";
     }
-    return "none";
   };
 
-  if (slpError_ == SLPError::SLP_SUCCESS) {
-    fname_ = fn_;
+  std::string tmp_ = std::move(fn_);
+  SLPError err = normFn(tmp_);
+  std::cout << "tmp " << tmp_ << "\n";
+  if (err == SLPError::SLP_SUCCESS) {
+    fname_ = tmp_;
 
     decl = doc.NewDeclaration();
     doc.LinkEndChild(decl);
@@ -1657,7 +1671,8 @@ SLPRawToXML::close()
            : SLPError::SLP_ERR_XML_FILE_NOT_SAVE;
 }
 
-/* private------------------------------------------------------------------ */
+/* private------------------------------------------------------------------
+ */
 /*!
  * \internal
  * \brief Auxiliary member that return a formatted localtime.
@@ -1784,5 +1799,46 @@ SLPRawToXML::writePart()
     }
   }
 }
+
+/*!
+ * \internal
+ * \brief Auxiliary member that provides the '.xml' extension to the
+ * filename if the user does not inform.
+ * \param fn_ File name
+ * \return PFLError
+ * \return Normalized file name by reference name with .xml extension.
+ * --------------------------------------------------------------------------
+ * \note 1. Basically for a name to be considered inconsistent, it must have
+ * more than one dot '.' in its formation.
+ * \note 2. If there're spaces in the filename they will be replaced by '_'.
+ * \note 3. The file name informed is converted to lowercase.
+ */
+SquidLogData::SLPError
+SLPRawToXML::normFn(std::string& fn_)
+{
+  std::string fn_s = fn_;
+  int c = 0;
+  for (auto& a : fn_) {
+    if (a == '.') {
+      ++c;
+    }
+  }
+
+  if (c <= 1) {
+    std::replace(fn_.begin(), fn_.end(), ' ', '_');
+    std::transform(fn_.cbegin(), fn_.cend(), fn_.begin(), ::tolower);
+    if (size_t f = std::string_view{ fn_ }.rfind("."); f != std::string::npos) {
+      if (std::string s_ = fn_.substr(f + 1, fn_.size()); s_ != "xml") {
+        fn_.replace(f + 1, fn_.size(), "xml");
+      }
+      return SLPError::SLP_SUCCESS;
+    } else {
+      fn_ += ".xml";
+      return SLPError::SLP_SUCCESS;
+    }
+  }
+
+  return SLPError::SLP_ERR_XML_FILE_NAME_INCONSISTENT;
+};
 
 } // namespace squidlogparser
