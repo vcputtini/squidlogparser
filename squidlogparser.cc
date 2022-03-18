@@ -453,7 +453,7 @@ SquidLogParser::toXML(const std::string&& fn_,
         }
       }
     } else {
-      for (auto& a : mEntry) {
+      for (const auto& a : mEntry) {
         xml.append(a.second);
       }
     }
@@ -679,7 +679,7 @@ SquidLogParser::getErrorRE(std::regex_error& e_) const
  * \param d_ Data
  * \return int
  */
-int
+constexpr int
 SquidLogParser::intFields(Fields f_, const DataSet_Squid& d_) const
 {
 
@@ -693,8 +693,10 @@ SquidLogParser::intFields(Fields f_, const DataSet_Squid& d_) const
     case Fields::HttpStatus: {
       return d_.httpStatus;
     }
+    default: {
+      return -1;
+    }
   }
-  return -1;
 }
 
 /*!
@@ -704,7 +706,7 @@ SquidLogParser::intFields(Fields f_, const DataSet_Squid& d_) const
  * \param d_ Data
  * \return uint32_t
  */
-uint32_t
+constexpr uint32_t
 SquidLogParser::uint32Fields(Fields f_, const DataSet_Squid& d_) const
 {
   switch (f_) {
@@ -714,8 +716,10 @@ SquidLogParser::uint32Fields(Fields f_, const DataSet_Squid& d_) const
     case Fields::CliSrcIpAddr: {
       return d_.cliSrcIpAddr;
     }
+    default: {
+      return 0;
+    }
   }
-  return 0;
 }
 
 /*!
@@ -771,9 +775,10 @@ SquidLogParser::strFields(Fields f_, const DataSet_Squid& d_) const
     case Fields::UserAgent: {
       return d_.userAgent;
     }
+    default: {
+      return invalidText.data();
+    }
   }
-
-  return invalidText.data();
 }
 
 /*!
@@ -786,6 +791,7 @@ SquidLogParser::strFields(Fields f_, const DataSet_Squid& d_) const
  * \param max_ Highest value.
  * \param cmp_ Type of logical operation: BTWAND | BTWOR
  *
+ *
  */
 template<typename TVarD, typename TMin, typename TMax, typename TCompare>
 bool
@@ -794,12 +800,17 @@ SquidLogParser::decision(TVarD&& data_,
                          TMax&& max_,
                          TCompare&& cmp_) const
 {
-  if (cmp_ == Compare::BTWAND) {
-    return ((data_ >= min_) && (data_ <= max_));
-  } else if (cmp_ == Compare::BTWOR) {
-    return ((data_ >= min_) || (data_ <= max_));
+  switch (cmp_) {
+    case Compare::BTWAND: {
+      return ((data_ >= min_) && (data_ <= max_));
+    }
+    case Compare::BTWOR: {
+      return ((data_ >= min_) || (data_ <= max_));
+    }
+    default: {
+      return false;
+    }
   }
-  return false;
 };
 
 /*!
@@ -815,20 +826,29 @@ template<typename TVarS, typename TVarD, typename TCompare>
 bool
 SquidLogParser::decision(TVarS&& lhs_, TVarD&& rhs_, TCompare&& cmp_) const
 {
-  if (cmp_ == Compare::EQ) {
-    return lhs_ == rhs_;
-  } else if (cmp_ == Compare::LT) {
-    return lhs_ < rhs_;
-  } else if (cmp_ == Compare::GT) {
-    return lhs_ > rhs_;
-  } else if (cmp_ == Compare::LE) {
-    return lhs_ <= rhs_;
-  } else if (cmp_ == Compare::GE) {
-    return lhs_ >= rhs_;
-  } else if (cmp_ == Compare::NE) {
-    return lhs_ != rhs_;
+  switch (cmp_) {
+    case Compare::EQ: {
+      return lhs_ == rhs_;
+    }
+    case Compare::LT: {
+      return lhs_ < rhs_;
+    }
+    case Compare::GT: {
+      return lhs_ > rhs_;
+    }
+    case Compare::LE: {
+      return lhs_ <= rhs_;
+    }
+    case Compare::GE: {
+      return lhs_ >= rhs_;
+    }
+    case Compare::NE: {
+      return lhs_ != rhs_;
+    }
+    default: {
+      return false;
+    }
   }
-  return false;
 };
 
 /*!
@@ -1523,6 +1543,8 @@ SLPQuery::countByReqMethod() const
 
 /*!
  * \brief SLPQuery::countByHttpCodes
+ *
+ * \note TODO
  */
 void
 SLPQuery::countByHttpCodes()
@@ -1624,7 +1646,6 @@ SLPRawToXML::save(const std::string fn_)
 
   std::string tmp_ = std::move(fn_);
   SLPError err = normFn(tmp_);
-  std::cout << "tmp " << tmp_ << "\n";
   if (err == SLPError::SLP_SUCCESS) {
     fname_ = tmp_;
 
@@ -1797,6 +1818,9 @@ SLPRawToXML::writePart()
       data->SetText(ds_squid_.userAgent.c_str());
       elem0->InsertEndChild(data);
     }
+    default: {
+      // do nothing
+    }
   }
 }
 
@@ -1818,7 +1842,7 @@ SLPRawToXML::normFn(std::string& fn_)
 {
   std::string fn_s = fn_;
   int c = 0;
-  for (auto& a : fn_) {
+  for (const auto& a : fn_) {
     if (a == '.') {
       ++c;
     }

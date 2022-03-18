@@ -536,7 +536,7 @@ public:
 
   static constexpr std::string_view invalidText = "@@@"; // Don't change!
 
-  // teste apenas
+  // Test only. Will be removed soon.
   void printuniq()
   {
     for (auto a : HttpCodesUniques_m) {
@@ -562,8 +562,8 @@ protected:
   void setError(SLPError e_);
   std::string getErrorRE(std::regex_error& e_) const;
 
-  int intFields(Fields f_, const DataSet_Squid& d_) const;
-  uint32_t uint32Fields(Fields f_, const DataSet_Squid& d_) const;
+  constexpr int intFields(Fields f_, const DataSet_Squid& d_) const;
+  constexpr uint32_t uint32Fields(Fields f_, const DataSet_Squid& d_) const;
   std::string strFields(Fields f_, const DataSet_Squid& d_) const;
 
   template<typename TVarD, typename TMin, typename TMax, typename TCompare>
