@@ -56,6 +56,7 @@
 #define SQUIDLOGPARSER_H
 
 #include <algorithm>
+#include <arpa/inet.h> // inet_pton()
 #include <array>
 #include <chrono>
 #include <climits> // INT_MAX, LONG_MAX, UINT_MAX, ...
@@ -64,9 +65,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
-//#include <fstream>
-#include <arpa/inet.h> // inet_pton()
-#include <iomanip>     // std::setw()
+#include <iomanip> // std::setw()
 #include <iostream>
 #include <iterator> // std::back_inserter() ...
 #include <map>
@@ -77,6 +76,7 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -174,6 +174,7 @@ public:
  *
  * The default formats available (which do not need re-defining) are:
  *
+ * \verbatim
  * logformat squid      %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un
  * %Sh/%<a %mt
  *
@@ -186,6 +187,7 @@ public:
  * logformat referrer   %ts.%03tu %>a %{Referer}>h %ru
  *
  * logformat useragent  %>a [%tl] "%{User-Agent}>h"
+ * \endverbatim
  *
  */
 
@@ -233,7 +235,7 @@ struct SquidLogParser_EXPORT SquidLogData
 
     TotalSizeReply, // <st
 
-    HierStatusIpAddress, // %Sh/%<a (squid)
+    HierStatusIpAddress, // %Sh/%<a (squid) ex: ORIGINAL_DST/99.247.57.31
     MimeContentType,     // mt - MIME content type (squid)
     OrigRcvReqHeader,    // >h - Original received request header (combined)
 
@@ -277,7 +279,7 @@ struct SquidLogParser_EXPORT SquidLogData
   // --------------------------------------------------------------------------
 
   std::map<short, int> HttpCodesUniques_m;
-  std::map<const short, const std::string> HttpCodesText_m = {
+  const std::map<const short, const std::string_view> HttpCodesText_m = {
     // INFORMATIVE RESPONSES
     { 100, "Continue" },
     { 101, "Switching Protocol" },
@@ -387,7 +389,7 @@ struct SquidLogParser_EXPORT SquidLogData
 
   struct Method_t
   {
-    const std::string str_;
+    const std::string_view sv_;
   } MethodText_t[10] = { { "GET" },     { "PUT" },   { "POST" },
                          { "CONNECT" }, { "HEAD" },  { "DELETE" },
                          { "OPTIONS" }, { "PATCH" }, { "TRACE" },
@@ -420,7 +422,7 @@ struct SquidLogParser_EXPORT SquidLogData
     SLP_ERR_UNKNOWN = 0xff,
   };
 
-  std::map<SLPError, const std::string> mError = {
+  const std::unordered_map<SLPError, const std::string_view> mError = {
     { SLPError::SLP_SUCCESS, "Success!" },
     { SLPError::SLP_ERR_PARSER_FAILED,
       "Parser Error: Probable reasons: badly formatted input." },
@@ -501,6 +503,31 @@ public:
 /* -------------------------------------------------------------------------- */
 
 /*!
+ * \brief Class used as data structure for the vector that will store the data
+ * about Http Request Codes. It'll allow simpler access to field values.
+ */
+class HRCData
+{
+public:
+  explicit HRCData(const short c_, const std::string d_, const int s_)
+    : code_(std::move(c_))
+    , descr_(std::move(d_))
+    , score_(std::move(s_))
+  {}
+
+  short getCode() const { return code_; };
+  std::string getDescription() const { return descr_; };
+  int getScore() const { return score_; };
+
+private:
+  short code_ = {};
+  std::string descr_ = {};
+  int score_ = {};
+};
+
+/* -------------------------------------------------------------------------- */
+
+/*!
  * \brief The SquidLogParser class
  */
 class SquidLogParser_EXPORT SquidLogParser
@@ -523,7 +550,7 @@ public:
 
   // Convenience functions
   uint32_t addrToNumeric(const std::string addr_ = std::string()) const;
-  std::string numericToAddr(const uint32_t ip_ = 0) const;
+  std::string numericToAddr(const uint32_t&& ip_ = 0) const;
 
   uint32_t unixTimestamp(const std::string d_ = std::string()) const;
   std::string unixToSquidDate(std::time_t uts_) const;
@@ -556,7 +583,7 @@ protected:
 
   bool isMonth(const std::string&& s_);
   int monthToNumber(const std::string&& s_) const;
-  std::string numberToMonth(const int m_) const;
+  std::string numberToMonth(const int&& m_) const;
   std::tm mkTime(const std::string d_) const;
 
   void setError(SLPError e_);
@@ -661,12 +688,20 @@ public:
   };
   accReqMethods_t countByReqMethod() const;
 
-  void countByHttpCodes();
+  void countByHttpCodes(const short&& code_ = 0);
+  std::pair<int, std::string> getHRCScore(const short&& code_ = 0);
 
   inline std::string MethodText(MethodType mt_) const;
 
   size_t size() const;
   void clear();
+
+  // This type can be used by the user to simplify the return expression of the
+  // getHRCDetails() function
+  // HttpRequestCodes_V is a user-defined type that represents the std::vector
+  // that contains the fields: Code, Description and Score.
+  using HttpRequestCodes_V = std::vector<HRCData>;
+  HttpRequestCodes_V getHRCDetails();
 
 protected:
   std::multimap<DataKey, DataSet_Squid> mSubset_;
@@ -719,7 +754,7 @@ private:
 
   std::string localTime() const;
   void writePart();
-  SLPError normFn(std::string& fn_);
+  SLPError normFn(std::string& fn_) const;
 };
 
 /* ------------------------------------------------------------------------- */

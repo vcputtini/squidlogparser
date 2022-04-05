@@ -211,11 +211,11 @@ Visitor::varType(var_t t_) const
 /* SquidLogParser -----------------------------------------------------------
  */
 SquidLogParser::SquidLogParser(LogFormat log_fmt_)
-  : re_id_fmt_squid_(cp_id_fmt_squid_)
-  , re_id_fmt_common_(cp_id_fmt_common_)
-  , re_id_fmt_combined_(cp_id_fmt_combined_)
-  , re_id_fmt_referrer_(cp_id_fmt_referrer_)
-  , re_id_fmt_useragent_(cp_id_fmt_useragent_)
+  : re_id_fmt_squid_(cp_id_fmt_squid_, std::regex::optimize)
+  , re_id_fmt_common_(cp_id_fmt_common_, std::regex::optimize)
+  , re_id_fmt_combined_(cp_id_fmt_combined_, std::regex::optimize)
+  , re_id_fmt_referrer_(cp_id_fmt_referrer_, std::regex::optimize)
+  , re_id_fmt_useragent_(cp_id_fmt_useragent_, std::regex::optimize)
 {
   logFmt_ = log_fmt_;
 };
@@ -228,7 +228,7 @@ SquidLogParser&
 SquidLogParser::append(const std::string& raw_log_)
 {
   try {
-    rawLog_ = std::move(raw_log_);
+    removeExtraWhiteSpaces(raw_log_, rawLog_);
     switch (logFmt_) {
       case LogFormat::Squid: {
         if (parserSquid() == SLPError::SLP_SUCCESS) {
@@ -349,7 +349,7 @@ SquidLogParser::addrToNumeric(const std::string addr_) const
  * \return string IPv4 address in dot-decimal notation.
  */
 std::string
-SquidLogParser::numericToAddr(const uint32_t ip_) const
+SquidLogParser::numericToAddr(const uint32_t&& ip_) const
 {
   return (ip_ != 0UL ? IPv4Addr::ltoip(ip_) : std::string());
 }
@@ -367,7 +367,8 @@ SquidLogParser::unixTimestamp(const std::string d_) const
 {
   if (!d_.empty()) {
     std::regex re_(
-      "^(\\d{2})/([A-Z]{1}[a-z]{2})/(\\d{4}):(\\d{2}):(\\d{2}):(\\d{2}).*$");
+      "^(\\d{2})/([A-Z]{1}[a-z]{2})/(\\d{4}):(\\d{2}):(\\d{2}):(\\d{2}).*$",
+      std::regex::optimize);
     std::match_results<std::string::const_iterator> match;
     std::regex_match(d_.cbegin(), d_.cend(), match, re_);
     if (!match.empty()) {
@@ -469,13 +470,13 @@ SquidLogParser::toXML(const std::string&& fn_,
  */
 /*!
  * \internal
- * \brief Simple uppercase to lowercase characters conversion.
+ * \brief Simple recursive uppercase to lowercase characters conversion.
  * \param s_ Text with (maybe) uppercase  characteres.
  * \return Text in lowercase.
  */
-template<typename TString = std::string, typename TSize = size_t>
+template<typename TString, typename TSize>
 TString
-toLower(TString s_, TSize sz_)
+SquidLogParser::toLower(TString s_, TSize sz_)
 {
   if (sz_ != s_.size()) {
     s_[sz_] = ::tolower(s_[sz_]);
@@ -559,7 +560,7 @@ SquidLogParser::monthToNumber(const std::string&& s_) const
  * \return Abbrev of month's name
  */
 std::string
-SquidLogParser::numberToMonth(const int m_) const
+SquidLogParser::numberToMonth(const int&& m_) const
 {
   if ((m_ >= 1) && (m_ <= 12)) {
     return std::string(nmonths_[m_ - 1]);
@@ -577,18 +578,12 @@ std::tm
 SquidLogParser::mkTime(const std::string d_) const
 {
   struct std::tm tm_tmp = {};
-  auto [dd, mm, yy, hh, mn, ss] = std::tuple(std::stoi(d_.substr(0, 2)),
-                                             monthToNumber(d_.substr(3, 3)),
-                                             std::stoi(d_.substr(7, 4)),
-                                             std::stoi(d_.substr(12, 2)),
-                                             std::stoi(d_.substr(15, 2)),
-                                             std::stoi(d_.substr(18, 2)));
-  tm_tmp.tm_year = std::move(yy) - 1900;
-  tm_tmp.tm_mon = std::move(mm) - 1;
-  tm_tmp.tm_mday = std::move(dd);
-  tm_tmp.tm_hour = std::move(hh);
-  tm_tmp.tm_min = std::move(mn);
-  tm_tmp.tm_sec = std::move(ss);
+  tm_tmp.tm_year = std::move(std::stoi(d_.substr(7, 4))) - 1900;
+  tm_tmp.tm_mon = std::move(monthToNumber(d_.substr(3, 3))) - 1;
+  tm_tmp.tm_mday = std::move(std::stoi(d_.substr(0, 2)));
+  tm_tmp.tm_hour = std::move(std::stoi(d_.substr(12, 2)));
+  tm_tmp.tm_min = std::move(std::stoi(d_.substr(15, 2)));
+  tm_tmp.tm_sec = std::move(std::stoi(d_.substr(18, 2)));
 
   return tm_tmp;
 }
@@ -667,6 +662,9 @@ SquidLogParser::getErrorRE(std::regex_error& e_) const
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_STACK);
       break;
+    }
+    default: {
+      const_cast<SquidLogParser*>(this)->setError(SLPError::SLP_ERR_UNKNOWN);
     }
   }
   return getErrorText();
@@ -869,9 +867,9 @@ std::string
 SquidLogParser::getErrorText() const
 {
   if (const auto it_(mError.find(slpError_)); it_ != mError.end()) {
-    return it_->second;
+    return it_->second.data();
   }
-  return mError.at(SLPError::SLP_ERR_UNKNOWN);
+  return mError.at(SLPError::SLP_ERR_UNKNOWN).data();
 }
 
 /* private------------------------------------------------------------------
@@ -899,21 +897,19 @@ SquidLogParser::getErrorText() const
 SquidLogData::SLPError
 SquidLogParser::parserSquid()
 {
-  std::string raw_ = {};
 
   if (rawLog_.empty()) {
     setError(SLPError::SLP_SUCCESS);
     return SLPError::SLP_SUCCESS;
   }
-  removeExtraWhiteSpaces(rawLog_, raw_);
 
 #ifdef DEBUG_PARSER_SQUID
-  std::cout << "raw : " << raw_ << "\n";
+  std::cout << "raw : " << rawLog_ << "\n";
 #endif
 
   try {
     std::match_results<std::string::const_iterator> match;
-    std::regex_match(raw_.cbegin(), raw_.cend(), match, re_id_fmt_squid_);
+    std::regex_match(rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_squid_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -933,7 +929,7 @@ SquidLogParser::parserSquid()
 
     // stores unique http request codes for later score.
     HttpCodesUniques_m.insert(
-      { std::stoi(std::move(strRight(ds_squid_.reqStatusHierStatus, '/'))),
+      { std::move(std::stoi(strRight(ds_squid_.reqStatusHierStatus, '/'))),
         0 });
 
 #ifdef DEBUG_PARSER_SQUID
@@ -970,21 +966,19 @@ SquidLogParser::parserSquid()
 SquidLogData::SLPError
 SquidLogParser::parserCommon()
 {
-  std::string raw_ = {};
-
   if (rawLog_.empty()) {
     setError(SLPError::SLP_SUCCESS);
     return SLPError::SLP_SUCCESS;
   }
-  removeExtraWhiteSpaces(rawLog_, raw_);
 
 #ifdef DEBUG_PARSER_COMMON
-  std::cout << "raw : " << raw_ << "\n";
+  std::cout << "raw : " << rawLog_ << "\n";
 #endif
 
   try {
     std::match_results<std::string::const_iterator> match;
-    std::regex_match(raw_.cbegin(), raw_.cend(), match, re_id_fmt_common_);
+    std::regex_match(
+      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_common_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1004,7 +998,7 @@ SquidLogParser::parserCommon()
 
     // stores unique http request codes for later score.
     HttpCodesUniques_m.insert(
-      { std::stoi(std::move(strRight(ds_squid_.reqStatusHierStatus, '/'))),
+      { std::move(std::stoi(strRight(ds_squid_.reqStatusHierStatus, '/'))),
         0 });
 
 #ifdef DEBUG_PARSER_COMMON
@@ -1041,21 +1035,19 @@ SquidLogParser::parserCommon()
 SquidLogData::SLPError
 SquidLogParser::parserCombined()
 {
-  std::string raw_ = {};
-
   if (rawLog_.empty()) {
     setError(SLPError::SLP_SUCCESS);
     return SLPError::SLP_SUCCESS;
   }
-  removeExtraWhiteSpaces(rawLog_, raw_);
 
 #ifdef DEBUG_PARSER_COMBINED
-  std::cout << "raw : " << raw_ << "\n";
+  std::cout << "raw : " << rawLog_ << "\n";
 #endif
 
   try {
     std::match_results<std::string::const_iterator> match;
-    std::regex_match(raw_.cbegin(), raw_.cend(), match, re_id_fmt_combined_);
+    std::regex_match(
+      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_combined_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1077,7 +1069,7 @@ SquidLogParser::parserCombined()
 
     // stores unique http request codes for later score.
     HttpCodesUniques_m.insert(
-      { std::stoi(std::move(strRight(ds_squid_.reqStatusHierStatus, '/'))),
+      { std::move(std::stoi(strRight(ds_squid_.reqStatusHierStatus, '/'))),
         0 });
 
 #ifdef DEBUG_PARSER_COMBINED
@@ -1117,21 +1109,19 @@ SquidLogParser::parserCombined()
 SquidLogData::SLPError
 SquidLogParser::parserReferrer()
 {
-  std::string raw_ = {};
-
   if (rawLog_.empty()) {
     setError(SLPError::SLP_SUCCESS);
     return SLPError::SLP_SUCCESS;
   }
-  removeExtraWhiteSpaces(rawLog_, raw_);
 
 #ifdef DEBUG_PARSER_REFERRER
-  std::cout << "raw : " << raw_ << "\n";
+  std::cout << "raw : " << rawLog_ << "\n";
 #endif
 
   try {
     std::match_results<std::string::const_iterator> match;
-    std::regex_match(raw_.cbegin(), raw_.cend(), match, re_id_fmt_referrer_);
+    std::regex_match(
+      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_referrer_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1172,21 +1162,19 @@ SquidLogParser::parserReferrer()
 SquidLogData::SLPError
 SquidLogParser::parserUserAgent()
 {
-  std::string raw_ = {};
-
   if (rawLog_.empty()) {
     setError(SLPError::SLP_SUCCESS);
     return SLPError::SLP_SUCCESS;
   }
-  removeExtraWhiteSpaces(rawLog_, raw_);
 
 #ifdef DEBUG_PARSER_USERAGENT
-  std::cout << "raw : " << raw_ << "\n";
+  std::cout << "raw : " << rawLog_ << "\n";
 #endif
 
   try {
     std::match_results<std::string::const_iterator> match;
-    std::regex_match(raw_.cbegin(), raw_.cend(), match, re_id_fmt_useragent_);
+    std::regex_match(
+      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_useragent_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1469,7 +1457,7 @@ SLPQuery::getStr(const std::string&& ts_,
 
 /*!
  * \brief Returns the sum of the values of the "Total Size Reply" field.
- * \return int
+ * \return long
  */
 long
 SLPQuery::sumTotalSizeReply() const
@@ -1486,7 +1474,7 @@ SLPQuery::sumTotalSizeReply() const
 /*!
  * \brief Returns the sum of the values of the "Response Time" field in
  * milliseconds.
- * \return int
+ * \return long
  */
 long
 SLPQuery::sumResponseTime() const
@@ -1542,41 +1530,123 @@ SLPQuery::countByReqMethod() const
 }
 
 /*!
- * \brief SLPQuery::countByHttpCodes
+ * \brief processes the count by Http Request Code. If no value is informed, it
+ * will process all possible codes, otherwise only the informed code.
  *
- * \note TODO
+ * \param code A valid HRC code.
+ *
+ * \note The result of the process is stored in the map that is already
+ * populated with the codes found in the log file named HttpCodesUniques_m.
  */
 void
-SLPQuery::countByHttpCodes()
+SLPQuery::countByHttpCodes(const short&& code_)
 {
   if (HttpCodesUniques_m.size() > 0) {
+    // set scores to zero.
+    for (const auto& a : HttpCodesUniques_m) {
+      HttpCodesUniques_m.insert_or_assign(a.first, 0);
+    }
 
     std::for_each(mSubset_.cbegin(),
                   mSubset_.cend(),
-                  [this](const std::pair<DataKey, DataSet_Squid>& d_) {
-                    short i_ = std::move(
+                  [&code_, this](const std::pair<DataKey, DataSet_Squid>& d_) {
+                    const short c_ = std::move(
                       std::stoi(strRight(d_.second.reqStatusHierStatus, '/')));
-                    if (const auto it_ = HttpCodesUniques_m.find(i_);
-                        it_ != HttpCodesUniques_m.end()) {
-                      HttpCodesUniques_m[i_] += 1;
+                    if (code_ == 0) { // all
+                      if (const auto& it_ = HttpCodesUniques_m.find(c_);
+                          it_ != HttpCodesUniques_m.end()) {
+                        HttpCodesUniques_m[c_] += 1;
+                      }
+                    } else if (c_ == code_) {
+                      if (const auto& it_ = HttpCodesUniques_m.find(code_);
+                          it_ != HttpCodesUniques_m.end()) {
+                        HttpCodesUniques_m[code_] += 1;
+                      }
                     }
                   });
   }
 }
 
 /*!
- * \brief SLPQuery::MethodText
- * \param mt_
- * \return string
+ * \brief Returns the Http Request Code description and the count of occurrences
+ * in the log.
+ *
+ * \param code Http Request Code.
+ * \return std::pair<int, std::string> As follows:
+ *         'first' is total score and 'second' is code description
+ *
+ * \code
+ *
+ * (...)
+ * slpquery->countByHttpCodes(); // General count
+ *
+ * std::cout << "Description: " slpquery->getHRCScore(409).second
+ *           << " Score:  " << slpquery->getHRCScore(409).first << "\n";
+ *
+ * // Possible output
+ * // Description: Conflict Score: 150
+ * \endcode
+ *
+ */
+std::pair<int, std::string>
+SLPQuery::getHRCScore(const short&& code_)
+{
+  if (code_ > 0) {
+    std::pair<int, std::string> result_;
+    if (const auto& it_ = HttpCodesUniques_m.find(code_);
+        it_ != HttpCodesUniques_m.end()) {
+      result_.first = it_->second;
+    } else {
+      return { 0, "Unknown" };
+    }
+
+    if (const auto& it_ = HttpCodesText_m.find(code_);
+        it_ != HttpCodesText_m.end()) {
+      result_.second = it_->second;
+    }
+
+    return result_;
+  } else {
+    return { 0, "Unknown" };
+  }
+}
+
+/*!
+ * \brief SLPQuery::getHRCDetails
+ * \return
+ */
+SLPQuery::HttpRequestCodes_V
+SLPQuery::getHRCDetails()
+{
+  HttpRequestCodes_V hrc_v_;
+  // countByHttpCodes();
+  std::for_each(HttpCodesUniques_m.cbegin(),
+                HttpCodesUniques_m.cend(),
+                [&hrc_v_, this](const std::pair<short, int>& d_) {
+                  std::string descr_;
+                  if (const auto& it_ = HttpCodesText_m.find(d_.first);
+                      it_ != HttpCodesText_m.end()) {
+                    descr_ = it_->second;
+                  }
+                  hrc_v_.push_back(HRCData(d_.first, descr_, d_.second));
+                });
+
+  return hrc_v_;
+}
+
+/*!
+ * \brief Given an enumerator as an argument, returns the corresponding text.
+ * \param mt_ Enumerator
+ * \return string Text
  */
 inline std::string
 SLPQuery::MethodText(MethodType mt_) const
 {
-  return MethodText_t[static_cast<int>(mt_)].str_;
+  return MethodText_t[static_cast<int>(mt_)].sv_.data();
 }
 
 /*!
- * \brief SLPQuery::size
+ * \brief Returns the size of mSubset.
  * \return size_t
  */
 size_t
@@ -1585,6 +1655,9 @@ SLPQuery::size() const
   return mSubset_.size();
 }
 
+/*!
+ * \brief Clear all values mSubset.
+ */
 void
 SLPQuery::clear()
 {
@@ -1600,8 +1673,8 @@ SLPQuery::clear()
  */
 SLPRawToXML::SLPRawToXML(LogFormat fmt_, size_t count_)
   : slpError_(SLPError::SLP_SUCCESS)
-  , logFmt_(fmt_)
-  , cnt_(count_)
+  , logFmt_(std::move(fmt_))
+  , cnt_(std::move(count_))
 {}
 
 /*!
@@ -1838,7 +1911,7 @@ SLPRawToXML::writePart()
  * \note 3. The file name informed is converted to lowercase.
  */
 SquidLogData::SLPError
-SLPRawToXML::normFn(std::string& fn_)
+SLPRawToXML::normFn(std::string& fn_) const
 {
   std::string fn_s = fn_;
   int c = 0;
