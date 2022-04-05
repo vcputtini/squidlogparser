@@ -38,8 +38,6 @@
 #define EXAMPLE_H
 #include <iostream>
 #include <string>
-#include <tuple>
-#endif
 
 #include <squidlogparser.h>     // mandatory
 using namespace squidlogparser; // mandatory
@@ -134,3 +132,5 @@ main()
 
 #endif
 }
+
+#endif

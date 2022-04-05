@@ -38,8 +38,6 @@
 #define EXAMPLE_H
 #include <iostream>
 #include <string>
-#include <tuple>
-#endif
 
 #include <squidlogparser.h>     // mandatory
 using namespace squidlogparser; // mandatory
@@ -96,8 +94,7 @@ main()
    * e.g.: "(\\S+)"
    * e.g.: "(\\S+) \"(\\d{1})\""
    */
-  qry
-    ->select("01/Feb/2022:00:00:00",
+  qry->select("01/Feb/2022:00:00:00",
              "172.50.1.1",
              "28/Feb/2022:23:59:59",
              "172.50.1.100")
@@ -119,7 +116,7 @@ main()
                            qry->getStr("03/Feb/2022:11:39:34",
                                        "172.50.1.28",
                                        SquidLogParser::Fields::CliSrcIpAddr),
-                           qr1->getStr("03/Feb/2022:11:39:34",
+                           qry->getStr("03/Feb/2022:11:39:34",
                                        "172.50.1.28",
                                        SquidLogParser::Fields::Timestamp));
 
@@ -130,7 +127,6 @@ main()
   std::cout << "Sum total size reply   = " << qry->sumTotalSizeReply() << "\n";
   std::cout << "Sum Response Time (ms) = " << qry->sumResponseTime() << "\n";
 
-  
   std::cout << "GET\t= " << qry->countByReqMethod().Get << "\n";
   std::cout << "PUT\t= " << qry->countByReqMethod().Put << "\n";
   std::cout << "POST\t= " << qry->countByReqMethod().Post << "\n";
@@ -141,10 +137,11 @@ main()
   std::cout << "PATCH\t= " << qry->countByReqMethod().Patch << "\n";
   std::cout << "TRACE\t= " << qry->countByReqMethod().Trace << "\n";
   std::cout << "OTHERS\t= " << qry->countByReqMethod().Others << "\n";
-  
-  
+
   delete qry;
   delete p;
 
   return 0;
 }
+
+#endif

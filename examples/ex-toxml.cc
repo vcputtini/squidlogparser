@@ -38,7 +38,6 @@
 #define EXAMPLE_H
 #include <iostream>
 #include <string>
-#endif
 
 #include <squidlogparser.h>     // mandatory
 using namespace squidlogparser; // mandatory
@@ -96,3 +95,5 @@ main()
 
   return 0;
 }
+
+#endif
