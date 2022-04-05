@@ -26,3 +26,41 @@ Small programs are provided with examples in the 'examples/' folder of this proj
 - Loads entire log file into memory and check that the log entries are with the correct format;
 - Allows export of log entries to a XML file format.<br>
 - Allows query of log entries given a condition or regex.<br>
+
+### Objects
+
+- SquidLogParser
+ - Constructor
+    - explicit SquidLogParser(LogFormat log_fmt_ )
+ - Public Members
+    - append()
+    - errNum()
+    - getErrorText()
+    - size()
+    - clear()
+    - getPartInt()
+    - getPartUint()
+    - getPartStr()
+    - addrToNumeric()
+    - numericToAddr()
+    - unixTimestamp()
+    - unixToSquidDate()
+    - toXML()
+
+- SQLQuery
+ - Constructor
+    - explicit SLPQuery(SquidLogParser* obj_);
+ - Public Members
+    - select()
+    - field()
+    - getInt()
+    - getUInt()
+    - getStr()
+    - sumTotalSizeReply()
+    - sumResponseTime()
+    - countByReqMethod()
+    - countByHttpCdodes()
+    - HttpRequestCodes_V getHRCDetails()
+    - MethodText()
+    - size()
+    - clear()
