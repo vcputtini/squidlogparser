@@ -47,7 +47,7 @@ Small programs are provided with examples in the 'examples/' folder of this proj
     - unixToSquidDate()
     - toXML()
 
-- SQLQuery
+- SLPQuery
  - Constructor
     - explicit SLPQuery(SquidLogParser* obj_);
  - Public Members
@@ -64,3 +64,13 @@ Small programs are provided with examples in the 'examples/' folder of this proj
     - MethodText()
     - size()
     - clear()
+
+- SLPUrlParts
+ - Constructor
+    - explicit SLPUrlParts(const std::string rawUrl_);
+ - Public Members
+    - getProtocol()
+    - getDomain()
+    - getPath()
+    - getQuery()
+    - getFragment()
