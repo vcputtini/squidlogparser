@@ -208,8 +208,7 @@ Visitor::varType(var_t t_) const
   return typevar_;
 }
 
-/* SquidLogParser -----------------------------------------------------------
- */
+/* SquidLogParser ---------------------------------------------------------- */
 SquidLogParser::SquidLogParser(LogFormat log_fmt_)
   : re_id_fmt_squid_(cp_id_fmt_squid_, std::regex::optimize)
   , re_id_fmt_common_(cp_id_fmt_common_, std::regex::optimize)
@@ -1662,6 +1661,88 @@ void
 SLPQuery::clear()
 {
   mSubset_.clear();
+}
+
+/* SLPUrlParts-------------------------------------------------------------- */
+SLPUrlParts::SLPUrlParts(const std::string rawUrl_)
+  : raw_url_(rawUrl_)
+{
+  parseUrl();
+}
+
+std::string
+SLPUrlParts::getProtocol() const
+{
+  return url_t.protocol_;
+}
+
+std::string
+SLPUrlParts::getDomain() const
+{
+  return url_t.domain_;
+}
+
+std::string
+SLPUrlParts::getPath() const
+{
+  return url_t.path_;
+}
+
+std::string
+SLPUrlParts::getQuery() const
+{
+  return url_t.query_;
+}
+
+std::string
+SLPUrlParts::getFragment() const
+{
+  return url_t.fragment_;
+}
+
+/*!
+ * \private
+ * \brief SLPUrlParts::parseUrl
+ */
+void
+SLPUrlParts::parseUrl()
+{
+  if (!raw_url_.empty()) {
+    std::string work_url_ = raw_url_;
+
+    size_t p_frag_ = std::string_view{ work_url_ }.find("#");
+    if (p_frag_ != std::string::npos) {
+      url_t.fragment_ =
+        std::string_view{ work_url_ }.substr(p_frag_, raw_url_.size());
+      work_url_ = std::string_view{ work_url_ }.substr(0, p_frag_);
+    }
+
+    size_t p_query_ = std::string_view{ work_url_ }.find("?");
+    if (p_query_ != std::string::npos) {
+      url_t.query_ =
+        std::string_view{ work_url_ }.substr(p_query_, work_url_.size());
+      work_url_ = std::string_view{ work_url_ }.substr(0, p_query_);
+    }
+
+    size_t p_protocol_ = std::string_view{ work_url_ }.find("://");
+    size_t p_slash_;
+    if (p_protocol_ != std::string::npos) {
+      url_t.protocol_ = std::string_view{ work_url_ }.substr(0, p_protocol_);
+      work_url_ =
+        std::string_view{ work_url_ }.substr(p_protocol_ + 3, work_url_.size());
+
+      // get domain
+      p_slash_ = std::string_view{ work_url_ }.find("/");
+      if (p_slash_ != std::string::npos) {
+        url_t.domain_ = std::string_view{ work_url_ }.substr(0, p_slash_);
+      }
+
+      if (p_slash_ < work_url_.size()) {
+        url_t.path_ =
+          std::string_view{ work_url_ }.substr(p_slash_, work_url_.size());
+      }
+    }
+  }
 }
 
 /* SPLRawToXML--------------------------------------------------------------

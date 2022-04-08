@@ -722,6 +722,44 @@ private:
   } info_t;
 };
 
+/* SLPUrlParts -------------------------------------------------------------- */
+
+/*!
+ * \brief Implementation of the URL parser.
+ *
+ * It breaks the URL into its main parts as follows:
+ * PROTOCOL, DOMAIN, PATH, QUERY and FRAGMENT.
+ *
+ * protocol://DOMAIN:PORT/path?query#fragment
+ *
+ * It was inspired by the built-in PARSE_URL() function of Apache IMPALA.
+ */
+class SLPUrlParts
+{
+public:
+  explicit SLPUrlParts(const std::string rawUrl_);
+
+  std::string getProtocol() const;
+  std::string getDomain() const;
+  std::string getPath() const;
+  std::string getQuery() const;
+  std::string getFragment() const;
+
+private:
+  std::string raw_url_;
+
+  struct UrlAnatomy_t
+  {
+    std::string protocol_;
+    std::string domain_;
+    std::string path_;
+    std::string query_;
+    std::string fragment_;
+  } url_t;
+
+  void parseUrl();
+};
+
 /* ------------------------------------------------------------------------- */
 
 /*!
