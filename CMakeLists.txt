@@ -1,6 +1,7 @@
 ﻿cmake_minimum_required(VERSION 3.14)
 project(squidlogparser LANGUAGES CXX VERSION 1.0 DESCRIPTION "Squid-cache Log Parser")
 
+#set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

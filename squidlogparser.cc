@@ -1664,36 +1664,62 @@ SLPQuery::clear()
 }
 
 /* SLPUrlParts-------------------------------------------------------------- */
+/*!
+ * \brief Parses URLs (http[s]) the log line and returns the parts inside the
+ * UrlAnatomy_t structure.
+ *
+ * \param rawUrl_
+ */
 SLPUrlParts::SLPUrlParts(const std::string rawUrl_)
   : raw_url_(rawUrl_)
 {
   parseUrl();
 }
 
+/*!
+ * \brief SLPUrlParts::getProtocol
+ * \return string
+ */
 std::string
 SLPUrlParts::getProtocol() const
 {
   return url_t.protocol_;
 }
 
+/*!
+ * \brief SLPUrlParts::getDomain
+ * \return string
+ */
 std::string
 SLPUrlParts::getDomain() const
 {
   return url_t.domain_;
 }
 
+/*!
+ * \brief SLPUrlParts::getPath
+ * \return string
+ */
 std::string
 SLPUrlParts::getPath() const
 {
   return url_t.path_;
 }
 
+/*!
+ * \brief SLPUrlParts::getQuery
+ * \return string
+ */
 std::string
 SLPUrlParts::getQuery() const
 {
   return url_t.query_;
 }
 
+/*!
+ * \brief SLPUrlParts::getFragment
+ * \return string
+ */
 std::string
 SLPUrlParts::getFragment() const
 {
@@ -1702,12 +1728,15 @@ SLPUrlParts::getFragment() const
 
 /*!
  * \private
- * \brief SLPUrlParts::parseUrl
+ * \brief Parses URLs (http[s]) the log line.
+ *
  */
 void
 SLPUrlParts::parseUrl()
 {
-  if (!raw_url_.empty()) {
+  if (!raw_url_.empty() ||
+      std::string_view{ raw_url_ }.find("://") == std::string::npos) {
+    url_t = {};
     std::string work_url_ = raw_url_;
 
     size_t p_frag_ = std::string_view{ work_url_ }.find("#");
