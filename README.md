@@ -12,6 +12,7 @@ I use it for my projects, even if these don't directly involve using the Qt(tm) 
 
 ### My Environment
 - Fedora 35<br>
+- clang (clang++) version 13.0.0<br>
 - g++ (GCC) 11.2.1 20220127 (Red Hat 11.2.1-9)<br>
 (Under Oracle Linux 8 install gcc-devtool-10 or 8.5 install gcc-devtool-11)<br>
 - cmake version 3.22.0<br>
