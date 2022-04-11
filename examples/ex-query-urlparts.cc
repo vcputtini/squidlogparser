@@ -44,7 +44,8 @@ using namespace squidlogparser; // mandatory
 
 /*
  * Compile:
- * g++ -Wall -O2 -std=c++17 -lsquidlogparser -pthread ex-query-urlparts.cc -o ex-query
+ * g++ -Wall -O2 -std=c++17 -lsquidlogparser -pthread ex-query-urlparts.cc -o
+ * ex-query
  *
  * Usage stream: cat access.log | ./ex-query-urlparts
  *
@@ -83,69 +84,77 @@ main()
    *             .field(Fields, Comparition, Value);
    *
    */
-  
-  SLPQuery *qry = new SLPQuery(p);
-    
-   qry->select("01/Feb/2022:00:00:00","192.168.1.1" ,
-                "31/Mar/2022:23:59:59","192.168.1.107")
-            .field(SquidLogParser::Fields::TotalSizeReply, SquidLogParser::Compare::GT, 0);
-    if (qry->errorNum() != SquidLogParser::SLPError::SLP_SUCCESS) {
-      std::cout << "\n0>>> " << qry->getErrorText() << "\n";      
-    } else {
-        std::cout << "\n0>>> " << qry->getErrorText() << "\n";      
-    }
 
-    std::vector<std::string> v_ = qry->getStr("03/Feb/2022:11:14:03","192.168.1.22", SquidLogParser::Fields::ReqURL);
-    for (size_t i = 0; i < v_.size(); ++i) {
-      std::cout << "URL = " << v_[i] << "\n";
-      
-      UrlParts up(v_[i]);
-      std::cout << "prot " << up.getProtocol() << "\n"
-            << "dom " << up.getDomain() << "\n"
-            << "path " << up.getPath() << "\n"
-            << "qry " << up.getQuery() << "\n"
-            << "frag " << up.getFragment() << "\n";         
-            
-      std::cout << "--------------------------------------------------------------------------------\n";
-    }
-    
-    /* Output example:
-    URL = https://conteudo.xyz.com/c/parceiros/f3/2021/12/10/1639127318478_v2_300x225.png.webp
-    prot https
-    dom conteudo.xyz.com.br
-    path /c/parceiros/f3/2021/12/10/1639127318478_v2_300x225.png.webp
-    qry 
-    frag 
-    --------------------------------------------------------------------------------
-    URL = https://conteudo.xyz.com/c/home/d7/2022/02/03/1643883365062_v2_450x253.png.webp
-    prot https
-    dom conteudo.xyz.com
-    path /c/home/d7/2022/02/03/1643883365062_v2_450x253.png.webp
-    qry 
-    frag 
-    --------------------------------------------------------------------------------
-    URL = https://conteudo.xyz.com/c/home/layout/vueland/icons/brand/channel.svg?
-    prot https
-    dom conteudo.xyz.com.br
-    path /c/home/layout/vueland/icons/brand/channel.svg
-    qry ?
-    frag 
-    --------------------------------------------------------------------------------
-    URL = https://conteudo.xyz.com.br/c/home/layout/vueland/icons/brand/uol.svg?
-    prot https
-    dom conteudo.xyz.com.br
-    path /c/home/layout/vueland/icons/brand/uol.svg
-    qry ?
-    frag 
-    --------------------------------------------------------------------------------
-    URL = https://www.banana.com:443/c/ayx?q=fruit#anything
-    prot https
-    dom www.banana.com:443
-    path /c/ayx
-    qry ?q=fruit
-    frag #anything
-  */
-    
+  SLPQuery* qry = new SLPQuery(p);
+
+  qry
+    ->select("01/Feb/2022:00:00:00",
+             "192.168.1.1",
+             "31/Mar/2022:23:59:59",
+             "192.168.1.107")
+    .field(
+      SquidLogParser::Fields::TotalSizeReply, SquidLogParser::Compare::GT, 0);
+  if (qry->errorNum() != SquidLogParser::SLPError::SLP_SUCCESS) {
+    std::cout << "\n0>>> " << qry->getErrorText() << "\n";
+  } else {
+    std::cout << "\n0>>> " << qry->getErrorText() << "\n";
+  }
+
+  std::vector<std::string> v_ = qry->getStr(
+    "03/Feb/2022:11:14:03", "192.168.1.22", SquidLogParser::Fields::ReqURL);
+  for (size_t i = 0; i < v_.size(); ++i) {
+    std::cout << "URL = " << v_[i] << "\n";
+
+    UrlParts up(v_[i]);
+    std::cout << "prot " << up.getProtocol() << "\n"
+              << "dom " << up.getDomain() << "\n"
+              << "path " << up.getPath() << "\n"
+              << "qry " << up.getQuery() << "\n"
+              << "frag " << up.getFragment() << "\n";
+
+    std::cout << "-------------------------------------------------------------"
+                 "-------------------\n";
+  }
+
+  /* Output example:
+  URL =
+  https://conteudo.xyz.com/c/parceiros/f3/2021/12/10/1639127318478_v2_300x225.png.webp
+  prot https
+  dom conteudo.xyz.com.br
+  path /c/parceiros/f3/2021/12/10/1639127318478_v2_300x225.png.webp
+  qry
+  frag
+  --------------------------------------------------------------------------------
+  URL =
+  https://conteudo.xyz.com/c/home/d7/2022/02/03/1643883365062_v2_450x253.png.webp
+  prot https
+  dom conteudo.xyz.com
+  path /c/home/d7/2022/02/03/1643883365062_v2_450x253.png.webp
+  qry
+  frag
+  --------------------------------------------------------------------------------
+  URL = https://conteudo.xyz.com/c/home/layout/vueland/icons/brand/channel.svg?
+  prot https
+  dom conteudo.xyz.com.br
+  path /c/home/layout/vueland/icons/brand/channel.svg
+  qry ?
+  frag
+  --------------------------------------------------------------------------------
+  URL = https://conteudo.xyz.com.br/c/home/layout/vueland/icons/brand/uol.svg?
+  prot https
+  dom conteudo.xyz.com.br
+  path /c/home/layout/vueland/icons/brand/uol.svg
+  qry ?
+  frag
+  --------------------------------------------------------------------------------
+  URL = https://www.banana.com:443/c/ayx?q=fruit#anything
+  prot https
+  dom www.banana.com:443
+  path /c/ayx
+  qry ?q=fruit
+  frag #anything
+*/
+
 #else
   std::string log_squid =
     "1603310517.212    494 192.168.15.28 TCP_MISS/200 5182 GET "
