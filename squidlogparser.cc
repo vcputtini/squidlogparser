@@ -227,6 +227,7 @@ SquidLogParser&
 SquidLogParser::append(const std::string& raw_log_)
 {
   try {
+    rawLog_.resize(raw_log_.size());
     removeExtraWhiteSpaces(raw_log_, rawLog_);
     switch (logFmt_) {
       case LogFormat::Squid: {
@@ -996,9 +997,7 @@ SquidLogParser::parserCommon()
     ds_squid_.reqStatusHierStatus = std::move(match[10]);
 
     // stores unique http request codes for later score.
-    HttpCodesUniques_m.insert(
-      { std::move(std::stoi(strRight(ds_squid_.reqStatusHierStatus, '/'))),
-        0 });
+    HttpCodesUniques_m.insert({ std::move(std::stoi(match[8])), 0 });
 
 #ifdef DEBUG_PARSER_COMMON
     std::cout << "ds_common :\n";
@@ -1040,7 +1039,7 @@ SquidLogParser::parserCombined()
   }
 
 #ifdef DEBUG_PARSER_COMBINED
-  std::cout << "raw : " << rawLog_ << "\n";
+  std::cout << "raw combined : " << rawLog_ << "\n";
 #endif
 
   try {
@@ -1067,9 +1066,7 @@ SquidLogParser::parserCombined()
     ds_squid_.reqStatusHierStatus = std::move(match[12]);
 
     // stores unique http request codes for later score.
-    HttpCodesUniques_m.insert(
-      { std::move(std::stoi(strRight(ds_squid_.reqStatusHierStatus, '/'))),
-        0 });
+    HttpCodesUniques_m.insert({ std::move(std::stoi(match[8])), 0 });
 
 #ifdef DEBUG_PARSER_COMBINED
     std::cout << "ds_combined :\n";
@@ -1206,7 +1203,7 @@ SquidLogParser::parserUserAgent()
 
 /*!
  * \internal
- * \brief  Normalize a string removing the extra white spaces between words.
+ * \brief Normalize a string removing the extra white spaces between words.
  * \param input_
  * \param output_
  * \note Adapted from:
@@ -1234,7 +1231,9 @@ SLPQuery::SLPQuery(SquidLogParser* obj_)
   , mSubset_({})
   , slpError_(SLPError::SLP_SUCCESS)
   , info_t({})
-{}
+{
+  logFmt_ = getFormat();
+}
 
 /*!
  * \brief Selects the records given the following arguments: Being date, begin
@@ -1536,6 +1535,9 @@ SLPQuery::countByReqMethod() const
  *
  * \note The result of the process is stored in the map that is already
  * populated with the codes found in the log file named HttpCodesUniques_m.
+ *
+ * \note UserAgent and Referrer formats don't have the Http Status field, so
+ * HttpCodesUniques_m will always be zero.
  */
 void
 SLPQuery::countByHttpCodes(const short&& code_)
@@ -1549,8 +1551,20 @@ SLPQuery::countByHttpCodes(const short&& code_)
     std::for_each(mSubset_.cbegin(),
                   mSubset_.cend(),
                   [&code_, this](const std::pair<DataKey, DataSet_Squid>& d_) {
-                    const short c_ = std::move(
-                      std::stoi(strRight(d_.second.reqStatusHierStatus, '/')));
+                    short c_ = 0;
+                    switch (logFmt_) {
+                      case LogFormat::Common:
+                        [[fallthrough]];
+                      case LogFormat::Combined: {
+                        c_ = std::move(d_.second.httpStatus);
+                        break;
+                      }
+                      default: {
+                        c_ = std::move(std::stoi(
+                          strRight(d_.second.reqStatusHierStatus, '/')));
+                      }
+                    }
+
                     if (code_ == 0) { // all
                       if (const auto& it_ = HttpCodesUniques_m.find(c_);
                           it_ != HttpCodesUniques_m.end()) {
@@ -1567,8 +1581,8 @@ SLPQuery::countByHttpCodes(const short&& code_)
 }
 
 /*!
- * \brief Returns the Http Request Code description and the count of occurrences
- * in the log.
+ * \brief Returns the Http Request Code description and the count of
+ * occurrences in the log.
  *
  * \param code Http Request Code.
  * \return std::pair<int, std::string> As follows:
@@ -1590,24 +1604,27 @@ SLPQuery::countByHttpCodes(const short&& code_)
 std::pair<int, std::string>
 SLPQuery::getHRCScore(const short&& code_)
 {
-  if (code_ > 0) {
-    std::pair<int, std::string> result_;
-    if (const auto& it_ = HttpCodesUniques_m.find(code_);
-        it_ != HttpCodesUniques_m.end()) {
-      result_.first = it_->second;
+  if (HttpCodesUniques_m.size() > 0) {
+    if (code_ > 0) {
+      std::pair<int, std::string> result_;
+      if (const auto& it_ = HttpCodesUniques_m.find(code_);
+          it_ != HttpCodesUniques_m.end()) {
+        result_.first = it_->second;
+      } else {
+        return { 0, "Unknown" };
+      }
+
+      if (const auto& it_ = HttpCodesText_m.find(code_);
+          it_ != HttpCodesText_m.end()) {
+        result_.second = it_->second;
+      }
+
+      return result_;
     } else {
       return { 0, "Unknown" };
     }
-
-    if (const auto& it_ = HttpCodesText_m.find(code_);
-        it_ != HttpCodesText_m.end()) {
-      result_.second = it_->second;
-    }
-
-    return result_;
-  } else {
-    return { 0, "Unknown" };
   }
+  return {}; // void pair
 }
 
 /*!
@@ -1618,7 +1635,6 @@ SLPQuery::HttpRequestCodes_V
 SLPQuery::getHRCDetails()
 {
   HttpRequestCodes_V hrc_v_;
-  // countByHttpCodes();
   std::for_each(HttpCodesUniques_m.cbegin(),
                 HttpCodesUniques_m.cend(),
                 [&hrc_v_, this](const std::pair<short, int>& d_) {
@@ -1663,7 +1679,8 @@ SLPQuery::clear()
   mSubset_.clear();
 }
 
-/* SLPUrlParts-------------------------------------------------------------- */
+/* SLPUrlParts--------------------------------------------------------------
+ */
 /*!
  * \brief Parses URLs (http[s]) the log line and returns the parts inside the
  * UrlAnatomy_t structure.

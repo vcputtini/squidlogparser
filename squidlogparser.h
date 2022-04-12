@@ -599,6 +599,8 @@ protected:
   template<typename TVarS, typename TVarD, typename TCompare>
   bool decision(TVarS&& lhs_, TVarD&& rhs_, TCompare&& cmp_) const;
 
+  LogFormat getFormat() { return logFmt_; }
+
 private:
   LogFormat logFmt_;
   std::string rawLog_ = {};
@@ -622,7 +624,8 @@ private:
 
   static constexpr char cp_id_fmt_combined_[] =
     "^(\\S+) (\\S+) (\\S+) \\[(.*?)\\] \\\"(\\S+) (\\S+) (\\S+)\\\" (\\S+) "
-    "(\\S+) \\\"(\\S+)\\\" \\\"(.*?)\\\" (.*)$";
+    "(\\S+) \\\"(\\S+)\\\" "
+    "\\\"(.*?)\\\" (.*)$";
 
   static constexpr char cp_id_fmt_referrer_[] = "^(\\S+) (\\S+) (\\S+) (.*)$";
   static constexpr char cp_id_fmt_useragent_[] =
