@@ -105,7 +105,7 @@ main()
   for (size_t i = 0; i < v_.size(); ++i) {
     std::cout << "URL = " << v_[i] << "\n";
 
-    UrlParts up(v_[i]);
+    SLPUrlParts up(v_[i]);
     std::cout << "prot " << up.getProtocol() << "\n"
               << "dom " << up.getDomain() << "\n"
               << "path " << up.getPath() << "\n"
