@@ -227,7 +227,8 @@ SquidLogParser&
 SquidLogParser::append(const std::string& raw_log_)
 {
   try {
-    rawLog_.resize(raw_log_.size());
+    rawLog_.resize(
+      raw_log_.size()); // try to lower the dynamic memory allocation a bit.
     removeExtraWhiteSpaces(raw_log_, rawLog_);
     switch (logFmt_) {
       case LogFormat::Squid: {
@@ -1754,7 +1755,10 @@ SLPUrlParts::parseUrl()
   if (!raw_url_.empty() ||
       std::string_view{ raw_url_ }.find("://") == std::string::npos) {
     url_t = {};
-    std::string work_url_ = raw_url_;
+
+    std::string work_url_;
+    work_url_.reserve(raw_url_.size());
+    work_url_ = raw_url_;
 
     size_t p_frag_ = std::string_view{ work_url_ }.find("#");
     if (p_frag_ != std::string::npos) {
