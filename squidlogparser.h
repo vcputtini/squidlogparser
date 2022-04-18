@@ -50,6 +50,7 @@
  * class DataKey
  * class SquidLogParser
  * class SLPQuery
+ * class SLPUrlParts
  * class SLPRawToXML
  */
 #ifndef SQUIDLOGPARSER_H
@@ -560,6 +561,8 @@ public:
                                  const std::string&& ip0_ = std::string(),
                                  const std::string&& d1_ = std::string(),
                                  const std::string&& ip1_ = std::string());
+
+  std::string ShowDecodedUrl(const std::string raw_) const;
 
   static constexpr std::string_view invalidText = "@@@"; // Don't change!
 

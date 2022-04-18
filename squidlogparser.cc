@@ -467,6 +467,43 @@ SquidLogParser::toXML(const std::string&& fn_,
   return SLPError::SLP_SUCCESS;
 }
 
+/*!
+ * \brief Show decoded URL
+ * \param raw_ Raw URL
+ * \return string URL decoded.
+ *
+ * \note This function is the result of Internet research and adaptations that
+ * we consider convenient.
+ */
+std::string
+SquidLogParser::ShowDecodedUrl(const std::string raw_) const
+{
+  std::string tmp_(raw_, raw_.size()); // tries to decrease dynamic allocation.
+
+  for (auto it_ = raw_.cbegin(); it_ != raw_.cend(); ++it_) {
+    switch (*it_) {
+      case '%': {
+        ++it_;
+        std::string byte_;
+        byte_.push_back(std::move(*it_));
+        ++it_;
+        byte_.push_back(std::move(*it_));
+        tmp_.push_back(
+          std::move(static_cast<unsigned char>(std::stol(byte_, nullptr, 16))));
+        break;
+      }
+      case '+': {
+        tmp_.push_back(std::move(' '));
+        break;
+      }
+      default: {
+        tmp_.push_back(std::move(*it_));
+      }
+    }
+  }
+  return tmp_;
+}
+
 /* protected----------------------------------------------------------------
  */
 /*!
@@ -950,9 +987,12 @@ SquidLogParser::parserSquid()
     }
 #endif
   } catch (std::regex_error& e_) {
-    std::cout << "Parse Squid-format regex error = " << e_.what() << "\n";
+    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
+  } catch (const std::exception& e_) {
+    std::cout << "[" << __LINE__ << "] "
+              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1018,10 +1058,14 @@ SquidLogParser::parserCommon()
     }
 #endif
   } catch (std::regex_error& e_) {
-    std::cout << "Parse Common-format regex error = " << e_.what() << "\n";
+    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
+  } catch (const std::exception& e_) {
+    std::cout << "[" << __LINE__ << "] "
+              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
   }
+
   setError(SLPError::SLP_SUCCESS);
   return SLPError::SLP_SUCCESS;
 }
@@ -1089,9 +1133,12 @@ SquidLogParser::parserCombined()
     }
 #endif
   } catch (std::regex_error& e_) {
-    std::cout << "Parse Combined-format regex error = " << e_.what() << "\n";
+    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
+  } catch (const std::exception& e_) {
+    std::cout << "[" << __LINE__ << "] "
+              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1142,9 +1189,12 @@ SquidLogParser::parserReferrer()
     }
 #endif
   } catch (std::regex_error& e_) {
-    std::cout << "Parse Referrer-format regex error = " << e_.what() << "\n";
+    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
+  } catch (const std::exception& e_) {
+    std::cout << "[" << __LINE__ << "] "
+              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1194,10 +1244,14 @@ SquidLogParser::parserUserAgent()
     }
 #endif
   } catch (std::regex_error& e_) {
-    std::cout << "Parse UserAgent-format regex error = " << e_.what() << "\n";
+    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
+  } catch (const std::exception& e_) {
+    std::cout << "[" << __LINE__ << "] "
+              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
   }
+
   setError(SLPError::SLP_SUCCESS);
   return SLPError::SLP_SUCCESS;
 }
