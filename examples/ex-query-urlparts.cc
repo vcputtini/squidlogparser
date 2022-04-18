@@ -104,6 +104,8 @@ main()
     "03/Feb/2022:11:14:03", "192.168.1.22", SquidLogParser::Fields::ReqURL);
   for (size_t i = 0; i < v_.size(); ++i) {
     std::cout << "URL = " << v_[i] << "\n";
+    std::cout << "Show Decoded = " << qry->ShowDecodedUrl(v_[i]) << "\n";
+    
 
     SLPUrlParts up(v_[i]);
     std::cout << "prot " << up.getProtocol() << "\n"
@@ -115,8 +117,9 @@ main()
     std::cout << "-------------------------------------------------------------"
                  "-------------------\n";
   }
-
-  /* Output example:
+   
+  
+  /* example of output without decoding:
   URL =
   https://conteudo.xyz.com/c/parceiros/f3/2021/12/10/1639127318478_v2_300x225.png.webp
   prot https
