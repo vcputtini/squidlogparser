@@ -47,6 +47,7 @@ Small programs are provided with examples in the 'examples/' folder of this proj
     - unixTimestamp()
     - unixToSquidDate()
     - toXML()
+    - ShowDecodedUrl(URL)
 
 - SLPQuery
  - Constructor
@@ -65,6 +66,7 @@ Small programs are provided with examples in the 'examples/' folder of this proj
     - MethodText()
     - size()
     - clear()
+    - ShowDecodedUrl(URL)
 
 - SLPUrlParts
  - Constructor
