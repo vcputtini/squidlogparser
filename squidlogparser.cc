@@ -210,11 +210,11 @@ Visitor::varType(var_t t_) const
 
 /* SquidLogParser ---------------------------------------------------------- */
 SquidLogParser::SquidLogParser(LogFormat log_fmt_)
-  : re_id_fmt_squid_(cp_id_fmt_squid_, std::regex::optimize)
-  , re_id_fmt_common_(cp_id_fmt_common_, std::regex::optimize)
-  , re_id_fmt_combined_(cp_id_fmt_combined_, std::regex::optimize)
-  , re_id_fmt_referrer_(cp_id_fmt_referrer_, std::regex::optimize)
-  , re_id_fmt_useragent_(cp_id_fmt_useragent_, std::regex::optimize)
+  : re_id_fmt_squid_(cp_id_fmt_squid_)
+  , re_id_fmt_common_(cp_id_fmt_common_)
+  , re_id_fmt_combined_(cp_id_fmt_combined_)
+  , re_id_fmt_referrer_(cp_id_fmt_referrer_)
+  , re_id_fmt_useragent_(cp_id_fmt_useragent_)
 {
   logFmt_ = log_fmt_;
 };
@@ -367,11 +367,9 @@ uint32_t
 SquidLogParser::unixTimestamp(const std::string d_) const
 {
   if (!d_.empty()) {
-    std::regex re_(
-      "^(\\d{2})/([A-Z]{1}[a-z]{2})/(\\d{4}):(\\d{2}):(\\d{2}):(\\d{2}).*$",
-      std::regex::optimize);
-    std::match_results<std::string::const_iterator> match;
-    std::regex_match(d_.cbegin(), d_.cend(), match, re_);
+    boost::regex re_(cp_fmt_squid_date);
+    boost::match_results<std::string::const_iterator> match;
+    boost::regex_match(d_, match, re_);
     if (!match.empty()) {
       auto [dd_, mm_, yy_, hh_, mn_, ss_] = std::tuple(std::stoi(match[1]),
                                                        monthToNumber(match[2]),
@@ -638,65 +636,70 @@ SquidLogParser::setError(SLPError e_)
 }
 
 std::string
-SquidLogParser::getErrorRE(std::regex_error& e_) const
+SquidLogParser::getErrorRE(boost::regex_error& e_) const
 {
   switch (e_.code()) {
-    case std::regex_constants::error_collate: {
+    case boost::regex_constants::error_collate: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_COLLATE);
       break;
     }
-    case std::regex_constants::error_ctype: {
+    case boost::regex_constants::error_ctype: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_CTYPE);
       break;
     }
-    case std::regex_constants::error_escape: {
+    case boost::regex_constants::error_escape: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_ESCAPE);
       break;
     }
-    case std::regex_constants::error_backref: {
+    case boost::regex_constants::error_backref: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_BACKREF);
       break;
     }
-    case std::regex_constants::error_brack: {
+    case boost::regex_constants::error_brack: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_BRACK);
       break;
     }
-    case std::regex_constants::error_paren: {
+    case boost::regex_constants::error_paren: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_PAREN);
       break;
     }
-    case std::regex_constants::error_badbrace: {
+    case boost::regex_constants::error_brace: {
+      const_cast<SquidLogParser*>(this)->setError(
+        SLPError::SLP_ERR_REGEX_BRACE);
+      break;
+    }
+    case boost::regex_constants::error_badbrace: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_BADBRACE);
       break;
     }
-    case std::regex_constants::error_range: {
+    case boost::regex_constants::error_range: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_RANGE);
       break;
     }
-    case std::regex_constants::error_space: {
+    case boost::regex_constants::error_space: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_SPACE);
       break;
     }
-    case std::regex_constants::error_badrepeat: {
+    case boost::regex_constants::error_badrepeat: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_BADREPEAT);
       break;
     }
-    case std::regex_constants::error_complexity: {
+    case boost::regex_constants::error_complexity: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_COMPLEXITY);
       break;
     }
-    case std::regex_constants::error_stack: {
+    case boost::regex_constants::error_stack: {
       const_cast<SquidLogParser*>(this)->setError(
         SLPError::SLP_ERR_REGEX_STACK);
       break;
@@ -946,13 +949,12 @@ SquidLogParser::parserSquid()
 #endif
 
   try {
-    std::match_results<std::string::const_iterator> match;
-    std::regex_match(rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_squid_);
+    boost::match_results<std::string::const_iterator> match;
+    boost::regex_match(rawLog_, match, re_id_fmt_squid_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
     }
-
     ds_squid_ = {};
     ds_squid_.timeStamp = std::move(std::stod(match[1]));
     ds_squid_.responseTime = std::move(std::stoi(match[2]));
@@ -986,7 +988,7 @@ SquidLogParser::parserSquid()
       std::cout << "> " << i << " -- " << match[i] << "\n";
     }
 #endif
-  } catch (std::regex_error& e_) {
+  } catch (boost::regex_error& e_) {
     std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1017,9 +1019,8 @@ SquidLogParser::parserCommon()
 #endif
 
   try {
-    std::match_results<std::string::const_iterator> match;
-    std::regex_match(
-      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_common_);
+    boost::match_results<std::string::const_iterator> match;
+    boost::regex_match(rawLog_, match, re_id_fmt_common_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1057,7 +1058,7 @@ SquidLogParser::parserCommon()
       std::cout << "> " << i << " -- " << match[i] << "\n";
     }
 #endif
-  } catch (std::regex_error& e_) {
+  } catch (boost::regex_error& e_) {
     std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1088,9 +1089,8 @@ SquidLogParser::parserCombined()
 #endif
 
   try {
-    std::match_results<std::string::const_iterator> match;
-    std::regex_match(
-      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_combined_);
+    boost::match_results<std::string::const_iterator> match;
+    boost::regex_match(rawLog_, match, re_id_fmt_combined_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1132,7 +1132,7 @@ SquidLogParser::parserCombined()
       std::cout << "> " << i << " -- " << match[i] << "\n";
     }
 #endif
-  } catch (std::regex_error& e_) {
+  } catch (boost::regex_error& e_) {
     std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1163,9 +1163,8 @@ SquidLogParser::parserReferrer()
 #endif
 
   try {
-    std::match_results<std::string::const_iterator> match;
-    std::regex_match(
-      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_referrer_);
+    boost::match_results<std::string::const_iterator> match;
+    boost::regex_match(rawLog_, match, re_id_fmt_referrer_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1188,7 +1187,7 @@ SquidLogParser::parserReferrer()
       std::cout << "> " << i << " -- " << match[i] << "\n";
     }
 #endif
-  } catch (std::regex_error& e_) {
+  } catch (boost::regex_error& e_) {
     std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1219,9 +1218,8 @@ SquidLogParser::parserUserAgent()
 #endif
 
   try {
-    std::match_results<std::string::const_iterator> match;
-    std::regex_match(
-      rawLog_.cbegin(), rawLog_.cend(), match, re_id_fmt_useragent_);
+    boost::match_results<std::string::const_iterator> match;
+    boost::regex_match(rawLog_, match, re_id_fmt_useragent_);
     if (match.empty()) {
       setError(SLPError::SLP_ERR_PARSER_FAILED);
       return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1243,7 +1241,7 @@ SquidLogParser::parserUserAgent()
       std::cout << "> " << i << " -- " << match[i] << "\n";
     }
 #endif
-  } catch (std::regex_error& e_) {
+  } catch (boost::regex_error& e_) {
     std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
@@ -1363,14 +1361,14 @@ SLPQuery::field(Fields fld_, Compare cmp_, Visitor::var_t&& t_)
         Visitor::TypeVar tv_ = varType(t_);
         if (tv_ == TypeVar::TString) {
           try {
-            std::regex re_(std::get<std::string>(t_).c_str());
-            std::smatch smatch_res_;
+            boost::regex re_(std::get<std::string>(t_).c_str());
+            boost::smatch smatch_res_;
             std::string s_ = strFields(fld_, it_.second);
-            if (std::regex_search(s_, smatch_res_, re_)) {
+            if (boost::regex_search(s_, smatch_res_, re_)) {
               return true;
             }
 
-          } catch (std::regex_error& e_) {
+          } catch (boost::regex_error& e_) {
             std::cout << "SLPQuery::fields() regex error: " << getErrorRE(e_)
                       << '\n';
           }

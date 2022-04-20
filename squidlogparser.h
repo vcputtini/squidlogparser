@@ -85,6 +85,10 @@
 #include <tinyxml2.h>
 using namespace tinyxml2; // mandatory
 
+// Boost:
+// Reason: Better performance and analysis of RE.
+#include <boost/regex.hpp>
+
 #if defined(_MSC_VER) || defined(WIN64) || defined(_WIN64) ||                  \
   defined(__WIN64__) || defined(WIN32) || defined(_WIN32) ||                   \
   defined(__WIN32__) || defined(__NT__)
@@ -414,6 +418,7 @@ struct SquidLogParser_EXPORT SquidLogData
     SLP_ERR_REGEX_BACKREF,
     SLP_ERR_REGEX_BRACK,
     SLP_ERR_REGEX_PAREN,
+    SLP_ERR_REGEX_BRACE,
     SLP_ERR_REGEX_BADBRACE,
     SLP_ERR_REGEX_RANGE,
     SLP_ERR_REGEX_SPACE,
@@ -437,7 +442,10 @@ struct SquidLogParser_EXPORT SquidLogData
     { SLPError::SLP_ERR_XML_FILE_NOT_SAVE, "File cannnot be save." },
     { SLPError::SLP_ERR_XML_FILE_NAME_INCONSISTENT,
       "File name is inconsistent." },
-    /*! \note Base on: https://en.cppreference.com/w/cpp/regex/error_type */
+    /*! \note Base on: https://en.cppreference.com/w/cpp/regex/error_type
+     *  \note Base on:
+     * https://www.boost.org/doc/libs/1_34_0/libs/regex/doc/error_type.html
+     */
     { SLPError::SLP_ERR_REGEX_COLLATE,
       "The expression contains an invalid collating element name." },
     { SLPError::SLP_ERR_REGEX_CTYPE,
@@ -451,8 +459,8 @@ struct SquidLogParser_EXPORT SquidLogData
       "The expression contains mismatched square brackets ('[' and ']')." },
     { SLPError::SLP_ERR_REGEX_PAREN,
       "The expression contains mismatched parentheses ('(' and ')')." },
-    { SLPError::SLP_ERR_REGEX_BADBRACE,
-      "The expression contains mismatched curly braces ('{' and '}')." },
+    { SLPError::SLP_ERR_REGEX_BRACE, "Mismatched '{' and '}'." },
+    { SLPError::SLP_ERR_REGEX_BADBRACE, "Invalid contents of a {...} block." },
     { SLPError::SLP_ERR_REGEX_RANGE,
       "The expression contains an invalid character range (e.g. [b-a])." },
     { SLPError::SLP_ERR_REGEX_SPACE,
@@ -590,7 +598,7 @@ protected:
   std::tm mkTime(const std::string d_) const;
 
   void setError(SLPError e_);
-  std::string getErrorRE(std::regex_error& e_) const;
+  std::string getErrorRE(boost::regex_error& e_) const;
 
   constexpr int intFields(Fields f_, const DataSet_Squid& d_) const;
   constexpr uint32_t uint32Fields(Fields f_, const DataSet_Squid& d_) const;
@@ -618,6 +626,9 @@ private:
    * Don't change the regular expressions below, it will make the whole
    * program crash!
    */
+  static constexpr char cp_fmt_squid_date[] =
+    "^(\\d{2})/([A-Z]{1}[a-z]{2})/(\\d{4}):(\\d{2}):(\\d{2}):(\\d{2}).*$";
+
   static constexpr char cp_id_fmt_squid_[] =
     "^(\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (.*)$";
 
@@ -634,11 +645,11 @@ private:
   static constexpr char cp_id_fmt_useragent_[] =
     "^(\\S+) \\[(\\S+ \\S+)\\] \\\"(.*?)\\\"";
 
-  std::regex re_id_fmt_squid_;
-  std::regex re_id_fmt_common_;
-  std::regex re_id_fmt_combined_;
-  std::regex re_id_fmt_referrer_;
-  std::regex re_id_fmt_useragent_;
+  boost::regex re_id_fmt_squid_;
+  boost::regex re_id_fmt_common_;
+  boost::regex re_id_fmt_combined_;
+  boost::regex re_id_fmt_referrer_;
+  boost::regex re_id_fmt_useragent_;
 
   SLPError parserSquid();
   SLPError parserCommon();
