@@ -8,7 +8,9 @@ As I consider QtCreator(tm) to be an excellent development environment,<br>
 I use it for my projects, even if these don't directly involve using the Qt(tm) tools.
 
 ### Dependencies for Compilation:
-- g++ which meets the c++17.<br>
+- At least C++17.<br>
+- Boost<br>
+- Tinyxml-2<br>
 
 ### My Environment
 - Fedora 35<br>
