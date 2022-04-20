@@ -38,7 +38,7 @@ set_target_properties(squidlogparser PROPERTIES VERSION ${PROJECT_VERSION}
 target_include_directories(squidlogparser PRIVATE .)
 set_target_properties(squidlogparser PROPERTIES PUBLIC_HEADER squidlogparser.h)
 
-target_link_libraries(squidlogparser PRIVATE -ltinyxml2 -lpthread)
+target_link_libraries(squidlogparser PRIVATE -ltinyxml2 -lboost_regex -lpthread)
 target_compile_definitions(squidlogparser PRIVATE squidlogparser_LIBRARY)
 
 # Uncomment to install (root)
