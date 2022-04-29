@@ -283,7 +283,18 @@ struct SquidLogParser_EXPORT SquidLogData
 
   // --------------------------------------------------------------------------
 
+  /*!
+   * \brief Stores unique HTTP codes.
+   * The first value is the HTTP code, the second will be the count of
+   * occurrences.
+   */
   std::map<short, int> HttpCodesUniques_m;
+
+  /*!
+   * \note There're several HTTP codes that are considered unofficial. Here
+   * they will be treated as unknown. To see more details about these codes
+   * visit: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+   */
   const std::map<const short, const std::string_view> HttpCodesText_m = {
     // INFORMATIVE RESPONSES
     { 100, "Continue" },
@@ -353,7 +364,10 @@ struct SquidLogParser_EXPORT SquidLogData
     { 506, "Variant Also Negotiates" },
     { 507, "Insufficient Storage" },
     { 508, "Not Extended" },
-    { 511, "Network Authentication Required" }
+    { 511, "Network Authentication Required" },
+    { 529, "Site is overloaded Unofficial" },
+    { 530, "Site is frozen Unofficial" }
+
   };
 
   // --------------------------------------------------------------------------

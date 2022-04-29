@@ -1695,6 +1695,8 @@ SLPQuery::getHRCDetails()
                   if (const auto& it_ = HttpCodesText_m.find(d_.first);
                       it_ != HttpCodesText_m.end()) {
                     descr_ = it_->second;
+                  } else {
+                    descr_ = "Unknown"; // for unofficial codes or error
                   }
                   hrc_v_.push_back(HRCData(d_.first, descr_, d_.second));
                 });
