@@ -156,7 +156,7 @@ main()
   std::cout << vec_[10].getCode() << " : " << vec_[10].getDescription() << " : "
             << vec_[10].getScore() << "\n";
 
-  for (size_t i = 0; i <= vec_.size(); ++i) {
+  for (size_t i = 0; i != vec_.size(); ++i) {
     std::cout << vec_[i].getCode() << " : " << vec_[i].getDescription() << " : "
               << vec_[i].getScore() << "\n";
   }
