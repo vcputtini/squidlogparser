@@ -74,8 +74,10 @@ Small programs are provided with examples in the 'examples/' folder of this proj
  - Constructor
     - explicit SLPUrlParts(const std::string rawUrl_);
  - Public Members
-    - getProtocol()
+    - getScheme()   (Old getProtocol())
     - getDomain()
+    - getUsername() (New)
+    - getPassword() (New)
     - getPath()
     - getQuery()
     - getFragment()
