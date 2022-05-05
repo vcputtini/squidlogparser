@@ -267,6 +267,10 @@ SquidLogParser::append(const std::string& raw_log_)
                                   ds_squid_.cliSrcIpAddr),
                           ds_squid_ });
         }
+        break;
+      }
+      case LogFormat::Unknown: {
+        break;
       }
     }
   } catch (const std::exception& e) {
@@ -1397,6 +1401,9 @@ SLPQuery::field(Fields fld_, Compare cmp_, Visitor::var_t&& t_)
             return decision(
               strFields(fld_, it_.second), std::get<std::string>(t_), cmp_);
           }
+          case TypeVar::TLong: {
+            break;
+          }
         } // switch
       }
       return false;
@@ -2214,15 +2221,10 @@ SLPRawToXML::writePart()
 SquidLogData::SLPError
 SLPRawToXML::normFn(std::string& fn_) const
 {
-  std::string fn_s = fn_;
-  int c = 0;
-  for (const auto& a : fn_) {
-    if (a == '.') {
-      ++c;
-    }
-  }
+  size_t c_ = std::count_if(
+    fn_.cbegin(), fn_.cend(), [](const unsigned char c) { return c == '.'; });
 
-  if (c <= 1) {
+  if (c_ <= 1) {
     std::replace(fn_.begin(), fn_.end(), ' ', '_');
     std::transform(fn_.cbegin(), fn_.cend(), fn_.begin(), ::tolower);
     if (size_t f = std::string_view{ fn_ }.rfind("."); f != std::string::npos) {

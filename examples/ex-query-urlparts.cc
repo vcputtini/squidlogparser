@@ -108,8 +108,10 @@ main()
     
 
     SLPUrlParts up(v_[i]);
-    std::cout << "prot " << up.getProtocol() << "\n"
+    std::cout << "prot " << up.getScheme() << "\n"
               << "dom " << up.getDomain() << "\n"
+              << "Username " << up.getUsername() << "\n"
+              << "Passoword " << up.getPassword() << "\n"
               << "path " << up.getPath() << "\n"
               << "qry " << up.getQuery() << "\n"
               << "frag " << up.getFragment() << "\n";

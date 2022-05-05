@@ -759,9 +759,9 @@ private:
  * \brief Implementation of the URL parser.
  *
  * It breaks the URL into its main parts as follows:
- * PROTOCOL, DOMAIN, PATH, QUERY and FRAGMENT.
+ * SCHEME, DOMAIN, USERNAME, PASSWORD, PATH, QUERY and FRAGMENT.
  *
- * protocol://DOMAIN:PORT/path?query#fragment
+ * scheme://<userinfo@>DOMAIN:PORT/path?query#fragment
  *
  * It was inspired by the built-in PARSE_URL() function of Apache IMPALA.
  */
