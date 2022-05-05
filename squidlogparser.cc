@@ -1749,13 +1749,13 @@ SLPUrlParts::SLPUrlParts(const std::string rawUrl_)
 }
 
 /*!
- * \brief SLPUrlParts::getProtocol
+ * \brief SLPUrlParts::getScheme
  * \return string
  */
 std::string
-SLPUrlParts::getProtocol() const
+SLPUrlParts::getScheme() const
 {
-  return url_t.protocol_;
+  return url_t.scheme_;
 }
 
 /*!
@@ -1766,6 +1766,26 @@ std::string
 SLPUrlParts::getDomain() const
 {
   return url_t.domain_;
+}
+
+/*!
+ * \brief SLPUrlParts::getUsername
+ * \return
+ */
+std::string
+SLPUrlParts::getUsername() const
+{
+  return url_t.username_;
+}
+
+/*!
+ * \brief SLPUrlParts::getPassword
+ * \return
+ */
+std::string
+SLPUrlParts::getPassword() const
+{
+  return url_t.password_;
 }
 
 /*!
@@ -1802,6 +1822,41 @@ SLPUrlParts::getFragment() const
  * \private
  * \brief Parses URLs (http[s]) the log line.
  *
+ * \verbatin
+ * RFC 2396
+ * 3. URI Syntactic Components
+ *
+ *  The URI syntax is dependent upon the scheme.  In general, absolute
+ *  URI are written as follows:
+ *
+ *     <scheme>:<scheme-specific-part>
+ *
+ *  An absolute URI contains the name of the scheme being used (<scheme>)
+ *  followed by a colon (":") and then a string (the <scheme-specific-
+ *  part>) whose interpretation depends on the scheme.
+ *
+ *  The URI syntax does not require that the scheme-specific-part have
+ *  any general structure or set of semantics which is common among all
+ *  URI.  However, a subset of URI do share a common syntax for
+ *  representing hierarchical relationships within the namespace.  This
+ *  "generic URI" syntax consists of a sequence of four main components:
+ *
+ *      <scheme>://<authority><path>?<query>
+ *
+ *  each of which, except <scheme>, may be absent from a particular URI.
+ *  For example, some URI schemes do not allow an <authority> component,
+ *  and others do not use a <query> component.
+ *
+ *     absoluteURI   = scheme ":" ( hier_part | opaque_part )
+ *
+ *  URI that are hierarchical in nature use the slash "/" character for
+ *  separating hierarchical components.  For some file systems, a "/"
+ *  character (used to denote the hierarchical structure of a URI) is the
+ *  delimiter used to construct a file name hierarchy, and thus the URI
+ *  path will look similar to a file pathname.  This does NOT imply that
+ *  the resource is a file or that the URI maps to an actual filesystem
+ *  (...)
+ * \endverbatim
  */
 void
 SLPUrlParts::parseUrl()
@@ -1828,17 +1883,23 @@ SLPUrlParts::parseUrl()
       work_url_ = std::string_view{ work_url_ }.substr(0, p_query_);
     }
 
-    size_t p_protocol_ = std::string_view{ work_url_ }.find("://");
+    size_t p_scheme_ = std::string_view{ work_url_ }.find("://");
     size_t p_slash_;
-    if (p_protocol_ != std::string::npos) {
-      url_t.protocol_ = std::string_view{ work_url_ }.substr(0, p_protocol_);
+    if (p_scheme_ != std::string::npos) {
+      url_t.scheme_ = std::string_view{ work_url_ }.substr(0, p_scheme_);
       work_url_ =
-        std::string_view{ work_url_ }.substr(p_protocol_ + 3, work_url_.size());
+        std::string_view{ work_url_ }.substr(p_scheme_ + 3, work_url_.size());
 
       // get domain
       p_slash_ = std::string_view{ work_url_ }.find("/");
       if (p_slash_ != std::string::npos) {
         url_t.domain_ = std::string_view{ work_url_ }.substr(0, p_slash_);
+        size_t at_sign_pos_ = { 0 };
+        if (getUserInfo(
+              at_sign_pos_)) { // Try to recover username:password if any.
+          url_t.domain_ =
+            std::string_view{ work_url_ }.substr(at_sign_pos_ + 1, p_slash_);
+        }
       }
 
       if (p_slash_ < work_url_.size()) {
@@ -1847,6 +1908,61 @@ SLPUrlParts::parseUrl()
       }
     }
   }
+}
+
+/*!
+ * \brief SLPUrlParts::hasEscape
+ * \param text_
+ * \return true|false
+ */
+bool
+SLPUrlParts::hasEscape(const std::string text_)
+{
+  size_t esc0_ = text_.find("%");
+  return esc0_ != std::string::npos ? true : false;
+}
+
+/*!
+ * \private
+ * \brief If there are, returns the user information, which are:
+ * username:password.
+ *
+ * \param size_t pos_ Position of at_sign, if found.
+ * \return true|false If userinfo was found.
+ *
+ * \verbatim
+ * RFC 2396 3.2.2. Server-based Naming Authority
+ * The user information, if present, is followed by a
+ * commercial at-sign "@".
+ *
+ *    userinfo      = *( unreserved | escaped |
+ *                       ";" | ":" | "&" | "=" | "+" | "$" | "," )
+ * \endverbatim
+ */
+bool
+SLPUrlParts::getUserInfo(size_t& pos_)
+{
+  SquidLogParser slp;
+
+  if (size_t at_sign_pos_ = url_t.domain_.find_first_of("@");
+      at_sign_pos_ != std::string::npos) {
+    std::string userinfo_ = url_t.domain_.substr(0, at_sign_pos_);
+    pos_ = at_sign_pos_; // retorn position.
+    size_t f_ = { 0 };
+    std::string temp_ = {};
+    if (hasEscape(userinfo_)) {
+      temp_ = slp.ShowDecodedUrl(userinfo_);
+    } else {
+      temp_ = userinfo_;
+    }
+
+    if (f_ = temp_.find(":"); f_ != std::string::npos) {
+      url_t.username_ = temp_.substr(0, f_);
+      url_t.password_ = temp_.substr(f_ + 1, temp_.size());
+      return true;
+    }
+  }
+  return false;
 }
 
 /* SPLRawToXML--------------------------------------------------------------
