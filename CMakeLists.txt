@@ -9,6 +9,21 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 
 add_definitions("-Wall -Wextra -pedantic")
 
+# -----------------------------------------------------------------------------
+# Enable this extension allows the parsed data to be recorded
+# directly on tables in MariaDB(tm)
+#
+# Note: See README_SLPDatabase.md for more details.
+#
+# Note: MySQL Connector C++ must be compiled and installed.
+# https://mariadb.com/docs/connect/programming-languages/
+# https://github.com/mariadb-corporation/mariadb-connector-cpp
+#
+# Enabled: ON
+# Disabled: OFF (DEFAULT)
+option(DATABASE_EXTENSION "Database Extension" OFF)
+# -----------------------------------------------------------------------------
+
 # These macros make the 'parser' functions print the values of the retrieved
 # fields to stdout.
 #
@@ -38,7 +53,14 @@ set_target_properties(squidlogparser PROPERTIES VERSION ${PROJECT_VERSION}
 target_include_directories(squidlogparser PRIVATE .)
 set_target_properties(squidlogparser PROPERTIES PUBLIC_HEADER squidlogparser.h)
 
-target_link_libraries(squidlogparser PRIVATE -ltinyxml2 -lboost_regex -lpthread)
+if(DATABASE_EXTENSION)
+    add_definitions("-DDATABASE_EXTENSION")
+    target_link_libraries(squidlogparser PRIVATE -ltinyxml2 -lboost_regex -lmariadbcpp -lpthread)
+else()
+    target_link_libraries(squidlogparser PRIVATE -ltinyxml2 -lboost_regex -lpthread)
+endif(DATABASE_EXTENSION)
+unset(DATABASE_EXTENSION CACHE)
+
 target_compile_definitions(squidlogparser PRIVATE squidlogparser_LIBRARY)
 
 # Uncomment to install (root)
