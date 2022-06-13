@@ -52,6 +52,9 @@
  * class SLPQuery
  * class SLPUrlParts
  * class SLPRawToXML
+ *
+ * class SLPDatabase (This class is optional, see CMakeLists.txt for details.)
+ *
  */
 #ifndef SQUIDLOGPARSER_H
 #define SQUIDLOGPARSER_H
@@ -62,32 +65,49 @@
 #include <chrono>
 #include <climits> // INT_MAX, LONG_MAX, UINT_MAX, ...
 #include <cmath>   // std::isless(), std::isgreater(), ...
+#include <csignal>
 #include <cstddef> // size_t
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <iomanip> // std::setw()
 #include <iostream>
 #include <iterator> // std::back_inserter() ...
 #include <map>
+#include <memory>
 #include <numeric> // accumulate
 #include <regex>
 #include <set>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
-#include <vector>
 
+namespace fsys = std::filesystem; // Do Not Change!
+
+/* ------------------------------------------------------------------------- */
 #include <tinyxml2.h>
 using namespace tinyxml2; // mandatory
+/* ------------------------------------------------------------------------- */
 
+/* ------------------------------------------------------------------------- */
 // Boost:
 // Reason: Better performance and analysis of RE.
 #include <boost/regex.hpp>
+/* ------------------------------------------------------------------------- */
+
+/* ------------------------------------------------------------------------- */
+// Ativa a extensao para a classe XYZ
+#if defined(DATABASE_EXTENSION)
+#include <mariadb/conncpp.hpp>
+#endif
+/* ------------------------------------------------------------------------- */
 
 #if defined(_MSC_VER) || defined(WIN64) || defined(_WIN64) ||                  \
   defined(__WIN64__) || defined(WIN32) || defined(_WIN32) ||                   \
@@ -627,6 +647,9 @@ protected:
   LogFormat getFormat() { return logFmt_; }
 
 private:
+  friend class SLPDatabase;
+
+private:
   LogFormat logFmt_;
   std::string rawLog_ = {};
   std::string logFileName_ = {};
@@ -672,6 +695,10 @@ private:
   SLPError parserUserAgent();
 
   void removeExtraWhiteSpaces(const std::string& input_, std::string& output_);
+
+  void printException(const std::exception& e_,
+                      const char* fname_,
+                      const int line_);
 };
 
 /* ------------------------------------------------------------------------- */
@@ -833,7 +860,189 @@ private:
   SLPError normFn(std::string& fn_) const;
 };
 
-/* ------------------------------------------------------------------------- */
+/* SLPDatabase ------------------------------------------------------------- */
+
+#if defined(DATABASE_EXTENSION)
+
+/*!
+ * \brief The DBEData struct
+ */
+struct SquidLogParser_EXPORT DBEData
+{
+  const std::array<std::pair<const std::string, const std::string>, 11>
+    scm_squid_a = { { { "ID", "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+                      { "ID_MONTH", "TINYINT UNSIGNED NOT NULL" },
+                      { "TIMESTAMP", "INTEGER UNSIGNED" },
+                      { "CLIENT_SRC_IP", "VARCHAR(40)" },
+                      { "REQSTATUS_HIERSTATUS", "VARCHAR(50)" },
+                      { "TOTAL_SIZE_REPLY", "INTEGER" },
+                      { "REQ_METHOD", "CHAR(10)" },
+                      { "URL", "BLOB" },
+                      { "USER_NAME", "VARCHAR(30)" },
+                      { "HIERSTATUS_IPADDRESS", "VARCHAR(30)" },
+                      { "MIMETYPE", "VARCHAR(100)" } } };
+
+  const std::array<std::pair<const std::string, const std::string>, 12>
+    scm_common_a = { { { "ID", "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+                       { "ID_MONTH", "TINYINT UNSIGNED NOT NULL" },
+                       { "CLIENT_SRC_IP", "VARCHAR(40)" },
+                       { "USER_NAME_FROM_IDENT", "VARCHAR(30)" },
+                       { "USER_NAME", "VARCHAR(30)" },
+                       { "LOCAL_TIME", "VARCHAR(50)" },
+                       { "REQ_METHOD", "CHAR(10)" },
+                       { "URL", "BLOB" },
+                       { "REQ_PROTO_VERSION", "VARCHAR(50)" },
+                       { "HTTP_STATUS", "INTEGER" },
+                       { "TOTAL_SIZE_REPLY", "INTEGER" },
+                       { "REQSTATUS_HIERSTATUS", "VARCHAR(50)" } } };
+
+  const std::array<std::pair<const std::string, const std::string>, 14>
+    scm_combined_a = { { { "ID", "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+                         { "ID_MONTH", "TINYINT UNSIGNED NOT NULL" },
+                         { "CLIENT_SRC_IP", "VARCHAR(40)" },
+                         { "USER_NAME_FROM_IDENT", "VARCHAR(30)" },
+                         { "USER_NAME", "VARCHAR(30)" },
+                         { "LOCAL_TIME", "VARCHAR(50)" },
+                         { "REQ_METHOD", "CHAR(10)" },
+                         { "URL", "BLOB" },
+                         { "REQ_PROTO_VERSION", "VARCHAR(50)" },
+                         { "HTTP_STATUS", "INTEGER" },
+                         { "TOTAL_SIZE_REPLY", "INTEGER" },
+                         { "REFERRER", "TEXT" },
+                         { "USER_AGENT", "TEXT" },
+                         { "HIERSTATUS_IPADDRESS", "VARCHAR(30)" } } };
+
+  const std::array<std::pair<const std::string, const std::string>, 6>
+    scm_ref_a = { { { "ID", "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+                    { "ID_MONTH", "TINYINT UNSIGNED NOT NULL" },
+                    { "TIMESTAMP", "INTEGER UNSIGNED" },
+                    { "CLIENT_SRC_IP", "VARCHAR(40)" },
+                    { "REFERRER", "TEXT" },
+                    { "URL", "BLOB" } } };
+
+  const std::array<std::pair<const std::string, const std::string>, 5>
+    scm_uagent_a = { { { "ID", "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+                       { "ID_MONTH", "TINYINT UNSIGNED NOT NULL" },
+                       { "CLIENT_SRC_IP", "VARCHAR(40)" },
+                       { "LOCAL_TIME", "VARCHAR(50)" },
+                       { "USER_AGENT", "TEXT" } }
+
+    };
+
+  enum class DBError
+  {
+    DBE_SUCCESS = 0x00,
+    DBE_ERR_LOGFORMAT,
+    DBE_ERR_INVALID_DBNAME,
+    DBE_ERR_INVALID_HNAME,
+    DBE_ERR_INVALID_UNAME,
+    DBE_ERR_INVALID_UPASS,
+    DBE_ERR_INVLAID_CONNECTION,
+    DBE_ERR_FILE_NOTOPEN,
+    DBE_ERR_FILE_NOTFOUND,
+    DBE_ERR_FILE_NOTREGULAR,
+    DBE_UNKNOWN
+  };
+
+  const std::unordered_map<DBError, const std::string_view> mDBError = {
+    { DBError::DBE_SUCCESS, "Success!" },
+    { DBError::DBE_ERR_LOGFORMAT, "Invalid Log Format." },
+    { DBError::DBE_ERR_INVALID_DBNAME, "Invalid Database Name." },
+    { DBError::DBE_ERR_INVALID_HNAME, "Invalid Host Name." },
+    { DBError::DBE_ERR_INVALID_UNAME, "Invalid User Name." },
+    { DBError::DBE_ERR_INVALID_UPASS, "Invalid User Password." },
+    { DBError::DBE_ERR_FILE_NOTOPEN, "Error trying to open input file." },
+    { DBError::DBE_ERR_FILE_NOTFOUND, "File not found." },
+    { DBError::DBE_ERR_FILE_NOTREGULAR, "Not a regular file." },
+    { DBError::DBE_UNKNOWN, "Unknown Error." }
+  };
+};
+
+/*!
+ * \brief The SLPDatabase class
+ */
+class SLPDatabase
+  : public DBEData
+  , public SquidLogParser
+{
+public:
+  explicit SLPDatabase(LogFormat format_ = LogFormat::Unknown,
+                       const std::string& dbase_ = std::string(),
+                       const std::string& host_ = std::string(),
+                       const int& port_ = dbDfltPort_,
+                       const std::string& user_ = std::string(),
+                       const std::string& pass_ = std::string(),
+                       const std::string& table_ = std::string());
+
+  ~SLPDatabase();
+
+  SLPDatabase& insert(const std::string& raw_log_);
+  void dataIngest(const std::string log_fname_ = std::string());
+
+  uint64_t getRowsInserted() const;
+  void resetRowsInserted();
+
+  DBError errorNum();
+  std::string getErrorText() const;
+
+  void createTable(bool closeConnection = true);
+
+private:
+  struct Data_t
+  {
+    std::string dbname_;
+    std::string tbname_;
+    std::string hname_;
+    int hport_;
+    std::string uname_;
+    std::string upass_;
+  };
+  std::unique_ptr<Data_t> d_ptr_;
+
+  LogFormat logFmt_;
+  DBError dberror_ = DBError::DBE_SUCCESS;
+
+  /* Default table names */
+  static constexpr std::string_view tbl_squid_ = "slp_log_squid";
+  static constexpr std::string_view tbl_common_ = "slp_log_common";
+  static constexpr std::string_view tbl_combined_ = "slp_log_combined";
+  static constexpr std::string_view tbl_referrer_ = "slp_log_referrer";
+  static constexpr std::string_view tbl_useragent_ = "slp_log_useragent";
+
+  static constexpr int dbDfltPort_ = 3306;
+
+  uint64_t rowsInserted_ = 0UL;
+
+  friend SLPError SquidLogParser::parserSquid();
+  friend SLPError SquidLogParser::parserCommon();
+  friend SLPError SquidLogParser::parserCombined();
+  friend SLPError SquidLogParser::parserReferrer();
+  friend SLPError SquidLogParser::parserUserAgent();
+  friend LogFormat SquidLogParser::getFormat();
+
+private: // SQL
+  sql::Driver* driver;
+  sql::SQLString strConn_;
+  sql::Properties sqlProps_;
+  std::unique_ptr<sql::Connection> conn_ptr_;
+  sql::Connection* connection();
+
+  void printSQLError(sql::SQLException& e_,
+                     const char* fname_,
+                     const int line_);
+
+private:
+  void buildConnStr();
+  void buidDMLInsertTbl();
+  void buildDDLCreateTbl(bool closeConn = false);
+
+  static void signalHandler(const int signum_);
+
+  template<typename T>
+  std::string composeStmnt(T t_, bool id = true);
+};
+
+#endif // DATABASE_EXTENSION
 
 } // namespace squidlogparser
 

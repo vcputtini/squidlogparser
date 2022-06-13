@@ -273,10 +273,9 @@ SquidLogParser::append(const std::string& raw_log_)
         break;
       }
     }
-  } catch (const std::exception& e) {
-    std::cout << "\n"
-              << __FUNCTION__ << ": [" << __LINE__ << "] "
-              << __FILE__ ": An exception occurred: " << e.what() << "\n\n";
+  } catch (const std::exception& e_) {
+    printException(e_, __FUNCTION__, __LINE__);
+    exit(EXIT_FAILURE);
   };
 
   return *this;
@@ -993,12 +992,12 @@ SquidLogParser::parserSquid()
     }
 #endif
   } catch (boost::regex_error& e_) {
-    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
+    std::cout << "SquidLogParser regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
   } catch (const std::exception& e_) {
-    std::cout << "[" << __LINE__ << "] "
-              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
+    printException(e_, __FUNCTION__, __LINE__);
+    exit(EXIT_FAILURE);
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1063,12 +1062,12 @@ SquidLogParser::parserCommon()
     }
 #endif
   } catch (boost::regex_error& e_) {
-    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
+    std::cout << "SquidLogParser regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
   } catch (const std::exception& e_) {
-    std::cout << "[" << __LINE__ << "] "
-              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
+    printException(e_, __FUNCTION__, __LINE__);
+    exit(EXIT_FAILURE);
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1137,12 +1136,12 @@ SquidLogParser::parserCombined()
     }
 #endif
   } catch (boost::regex_error& e_) {
-    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
+    std::cout << "SquidLogParser regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
   } catch (const std::exception& e_) {
-    std::cout << "[" << __LINE__ << "] "
-              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
+    printException(e_, __FUNCTION__, __LINE__);
+    exit(EXIT_FAILURE);
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1192,12 +1191,12 @@ SquidLogParser::parserReferrer()
     }
 #endif
   } catch (boost::regex_error& e_) {
-    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
+    std::cout << "SquidLogParser regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
   } catch (const std::exception& e_) {
-    std::cout << "[" << __LINE__ << "] "
-              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
+    printException(e_, __FUNCTION__, __LINE__);
+    exit(EXIT_FAILURE);
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1246,12 +1245,12 @@ SquidLogParser::parserUserAgent()
     }
 #endif
   } catch (boost::regex_error& e_) {
-    std::cout << "Parser PFLogentry regex error = " << e_.what() << "\n";
+    std::cout << "SquidLogParser regex error = " << e_.what() << "\n";
     setError(SLPError::SLP_ERR_PARSER_FAILED);
     return SLPError::SLP_ERR_PARSER_FAILED;
   } catch (const std::exception& e_) {
-    std::cout << "[" << __LINE__ << "] "
-              << __FILE__ ": An exception occurred: " << e_.what() << "\n";
+    printException(e_, __FUNCTION__, __LINE__);
+    exit(EXIT_FAILURE);
   }
 
   setError(SLPError::SLP_SUCCESS);
@@ -1276,6 +1275,22 @@ SquidLogParser::removeExtraWhiteSpaces(const std::string& input_,
     input_.cend(),
     std::back_insert_iterator<std::string>(output_),
     [](char a_, char b_) { return ::isspace(a_) && ::isspace(b_); });
+}
+
+/*!
+ * \internal
+ * \brief Prints formatted exception messages.
+ * \param e_
+ * \param fname_
+ * \param line_
+ */
+void
+SquidLogParser::printException(const std::exception& e_,
+                               const char* fname_,
+                               const int line_)
+{
+  std::cout << "\nSquidLogParser Caught an exception at " << fname_
+            << "::" << line_ << " " << e_.what() << '\n';
 }
 
 /* SLPQuery --------------------------------------------------------------- */
@@ -2240,5 +2255,586 @@ SLPRawToXML::normFn(std::string& fn_) const
 
   return SLPError::SLP_ERR_XML_FILE_NAME_INCONSISTENT;
 };
+
+/* SLPDatabase ------------------------------------------------------------- */
+#if defined(DATABASE_EXTENSION)
+SLPDatabase::SLPDatabase(LogFormat format_,
+                         const std::string& dbase_,
+                         const std::string& host_,
+                         const int& port_,
+                         const std::string& user_,
+                         const std::string& pass_,
+                         const std::string& table_)
+  : d_ptr_(std::make_unique<Data_t>())
+  , logFmt_(format_)
+  , rowsInserted_(0UL)
+  , driver(sql::mariadb::get_driver_instance())
+  , strConn_("tcp://") /* strConn_("jdbc:mariadb://") */
+  , sqlProps_({})
+{
+  std::signal(SIGINT, signalHandler);
+
+  if (!dbase_.empty()) {
+    d_ptr_->dbname_ = std::move(dbase_);
+
+    if (!host_.empty()) {
+      d_ptr_->hname_ = std::move(host_);
+    } else {
+      dberror_ = DBError::DBE_ERR_INVALID_HNAME;
+      return;
+    }
+
+    d_ptr_->hport_ = ((port_ <= 0) || (port_ > 65535) ? std::move(dbDfltPort_)
+                                                      : std::move(port_));
+
+    if (!user_.empty()) {
+      d_ptr_->uname_ = std::move(user_);
+    } else {
+      dberror_ = DBError::DBE_ERR_INVALID_UNAME;
+      return;
+    }
+    if (!pass_.empty()) {
+      d_ptr_->upass_ = std::move(pass_);
+    } else {
+      dberror_ = DBError::DBE_ERR_INVALID_UPASS;
+      return;
+    }
+
+    switch (logFmt_) {
+      case LogFormat::Squid: {
+        d_ptr_->tbname_ =
+          (table_.empty() ? std::move(tbl_squid_) : std::move(table_));
+        break;
+      }
+      case LogFormat::Common: {
+        d_ptr_->tbname_ =
+          (table_.empty() ? std::move(tbl_common_) : std::move(table_));
+        break;
+      }
+      case LogFormat::Combined: {
+        d_ptr_->tbname_ =
+          (table_.empty() ? std::move(tbl_combined_) : std::move(table_));
+        break;
+      }
+      case LogFormat::Referrer: {
+        d_ptr_->tbname_ =
+          (table_.empty() ? std::move(tbl_referrer_) : std::move(table_));
+        break;
+      }
+      case LogFormat::UserAgent: {
+        d_ptr_->tbname_ =
+          (table_.empty() ? std::move(tbl_useragent_) : std::move(table_));
+        break;
+      }
+      default: {
+        dberror_ = DBError::DBE_ERR_LOGFORMAT;
+        return;
+      }
+    }
+
+    sqlProps_ = { { "user", d_ptr_->uname_ }, { "password", d_ptr_->upass_ } };
+
+    buildConnStr();
+    conn_ptr_.reset(connection());
+
+  } // dbname_
+  dberror_ = DBError::DBE_SUCCESS;
+}
+
+/*!
+ * \internal
+ * \brief SLPDatabase::~SLPDatabase
+ */
+SLPDatabase::~SLPDatabase()
+{
+  conn_ptr_->close();
+};
+
+// public
+
+/*!
+ * \brief Inserts the log entries in the database table.
+ * \param raw_log_
+ *
+ */
+SLPDatabase&
+SLPDatabase::insert(const std::string& raw_log_)
+{
+
+  try {
+    rawLog_.resize(raw_log_.size());
+    removeExtraWhiteSpaces(raw_log_, rawLog_);
+    switch (logFmt_) {
+      case LogFormat::Squid: {
+        if (parserSquid() == SLPError::SLP_SUCCESS) {
+          mEntry.insert({ DataKey(ds_squid_.timeStamp, ds_squid_.cliSrcIpAddr),
+                          ds_squid_ });
+        }
+        break;
+      }
+      case LogFormat::Common: {
+        if (parserCommon() == SLPError::SLP_SUCCESS) {
+          mEntry.insert({ DataKey(unixTimestamp(ds_squid_.localTime),
+                                  ds_squid_.cliSrcIpAddr),
+                          ds_squid_ });
+        }
+        break;
+      }
+      case LogFormat::Combined: {
+        if (parserCombined() == SLPError::SLP_SUCCESS) {
+          mEntry.insert({ DataKey(unixTimestamp(ds_squid_.localTime),
+                                  ds_squid_.cliSrcIpAddr),
+                          ds_squid_ });
+        }
+        break;
+      }
+      case LogFormat::Referrer: {
+        if (parserReferrer() == SLPError::SLP_SUCCESS) {
+          mEntry.insert({ DataKey(ds_squid_.timeStamp, ds_squid_.cliSrcIpAddr),
+                          ds_squid_ });
+        }
+        break;
+      }
+      case LogFormat::UserAgent: {
+        if (parserUserAgent() == SLPError::SLP_SUCCESS) {
+          mEntry.insert({ DataKey(unixTimestamp(ds_squid_.localTime),
+                                  ds_squid_.cliSrcIpAddr),
+                          ds_squid_ });
+        }
+        break;
+      }
+      default: {
+        dberror_ = DBError::DBE_ERR_LOGFORMAT;
+        return *this;
+        break;
+      }
+    }
+  } catch (const std::exception& e_) {
+    std::cout << "\nSLPDatabase Caught an exception at " << __FUNCTION__
+              << "::" << __LINE__ << " " << e_.what() << '\n';
+    if (!conn_ptr_->isClosed()) {
+      conn_ptr_->close();
+    }
+    exit(EXIT_FAILURE);
+  };
+
+  if (slpError_ == SLPError::SLP_SUCCESS) {
+    buidDMLInsertTbl();
+  }
+
+  return *this;
+}
+
+/*!
+ * \brief Waits for a new entry in the desired log file, and when this entry is
+ * recorded by Squid-cache(tm) it is inserted into the database table.
+ *
+ * \param log_fname_
+ *
+ * \note Moves to the end of the file before waiting for online entries.
+ *       Thus preventing previous entries from being read again.
+ *       Has a behavior similar to the command: tail -n 0 -F file.txt
+ *
+ * std::ifstream::ate same behaviour that ifs.seekg(0, ifs.end);
+ *
+ */
+void
+SLPDatabase::dataIngest(const std::string log_fname_)
+{
+  fsys::path file_(log_fname_);
+  if (fsys::exists(file_)) {
+    if (!fsys::is_regular_file(file_)) {
+      dberror_ = DBError::DBE_ERR_FILE_NOTREGULAR;
+      return;
+    }
+  } else {
+    dberror_ = DBError::DBE_ERR_FILE_NOTFOUND;
+    return;
+  }
+
+  std::ifstream ifStr_(log_fname_, std::ifstream::ate);
+
+  // to simulate an error for capture
+  // ifStr_.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+
+  try {
+    if (ifStr_.is_open()) {
+      std::string line_ = {};
+      while (ifStr_.good()) {
+        while (std::getline(ifStr_, line_)) {
+          insert(line_);
+        }
+        if (!ifStr_.eof()) {
+          break;
+        }
+        ifStr_.clear();
+
+        // Wait before try again.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+    } else {
+      dberror_ = DBError::DBE_ERR_FILE_NOTOPEN;
+      return;
+    }
+  } catch (std::ifstream::failure& e_) {
+    std::cout << "\nSLPDatabase Caught an exception at " << __FUNCTION__
+              << "::" << __LINE__ << " " << e_.what() << " (" << e_.code()
+              << ")" << '\n';
+    exit(EXIT_FAILURE);
+  }
+}
+
+/*!
+ * \brief SLPDatabase::getRowsInserted
+ * \return
+ */
+uint64_t
+SLPDatabase::getRowsInserted() const
+{
+  return rowsInserted_;
+}
+
+/*!
+ * \brief SLPDatabase::resetRowsInserted
+ */
+void
+SLPDatabase::resetRowsInserted()
+{
+  rowsInserted_ = 0UL;
+}
+
+/*!
+ * \brief SLPDatabase::dbErrorNum
+ * \return DBError
+ */
+SLPDatabase::DBError
+SLPDatabase::errorNum()
+{
+  return dberror_;
+}
+
+/*!
+ * \brief Return the description of the error.
+ * \return std::string
+ */
+std::string
+SLPDatabase::getErrorText() const
+{
+  if (const auto it_(mDBError.find(dberror_)); it_ != mDBError.end()) {
+    return it_->second.data();
+  }
+  return mDBError.at(DBError::DBE_UNKNOWN).data();
+}
+
+/*!
+ * \brief Creates the table according to the chosen log format.
+ *        If 'true', close the connection after creating the table. If 'false'
+ *        don't close.
+ * \param closeConnection true(default)|false
+ */
+void
+SLPDatabase::createTable(bool closeConnection)
+{
+  buildDDLCreateTbl(closeConnection);
+}
+
+// privates ------------------------------------------------------------------
+
+/*!
+ * \internal
+ * \brief printSQLError
+ * \param e_
+ * \param fname_
+ * \param line_
+ * \note At this moment we consider it better that the system is aborted when
+ * it catches an error in the operations with the database.
+ */
+void
+SLPDatabase::printSQLError(sql::SQLException& e_,
+                           const char* fname_,
+                           const int line_)
+{
+  std::cout << "\nSLPDatabase Caught sql::SQLException at " << fname_
+            << "::" << line_ << " [" << e_.what() << "]"
+            << " (" << e_.getErrorCode() << "/" << e_.getSQLStateCStr()
+            << ")\n";
+  if (!conn_ptr_->isClosed()) {
+    conn_ptr_->close();
+  }
+  exit(EXIT_FAILURE);
+}
+
+/*!
+ * \internal
+ * \brief Try to connect to the database.
+ * \return connection pointer.
+ *
+ * \note At this moment we consider it better that the system is aborted when it
+ * catches an error in the operations with the database.
+ */
+sql::Connection*
+SLPDatabase::connection()
+{
+  try {
+    sql::Connection* c_(driver->connect(strConn_, sqlProps_));
+    return c_;
+  } catch (sql::SQLException& e_) {
+    printSQLError(e_, __FUNCTION__, __LINE__);
+    return nullptr;
+  }
+}
+
+/*!
+ * \internal
+ * \brief Compose the database connection string.
+ */
+void
+SLPDatabase::buildConnStr()
+{
+  strConn_.append(d_ptr_->hname_.c_str());
+  strConn_.append(":");
+  strConn_.append(std::to_string(d_ptr_->hport_).c_str());
+  strConn_.append("/");
+  strConn_.append(d_ptr_->dbname_.c_str());
+}
+
+/*!
+ * \internal
+ * \brief SLPDatabase::buidDMLInsertTbl
+ */
+void
+SLPDatabase::buidDMLInsertTbl()
+{
+  std::string stmt_ = {};
+  stmt_ = "INSERT INTO " + d_ptr_->tbname_ + " (";
+
+  switch (logFmt_) {
+    case LogFormat::Squid: {
+      stmt_ += composeStmnt(scm_squid_a, false);
+      stmt_.erase(stmt_.end() - 1);
+
+      std::string id_month_ = "FROM_UNIXTIME(" +
+                              std::to_string(getPartUInt(Fields::Timestamp)) +
+                              ",'%c'),";
+
+      stmt_ += ") VALUE (";
+      stmt_ += id_month_;
+      stmt_ += std::to_string(getPartUInt(Fields::Timestamp)) + ",";
+      stmt_ += "'" + getPartStr(Fields::CliSrcIpAddr) + "',";
+      stmt_ += "'" + getPartStr(Fields::ReqStatusHierStatus) + "',";
+      stmt_ += std::to_string(getPartInt(Fields::TotalSizeReply)) + ",";
+      stmt_ += "'" + getPartStr(Fields::ReqMethod) + "',";
+      stmt_ += "'" + getPartStr(Fields::ReqURL) + "',";
+      stmt_ += "'" + getPartStr(Fields::UserName) + "',";
+      stmt_ += "'" + getPartStr(Fields::HierStatusIpAddress) + "',";
+      stmt_ += "'" + getPartStr(Fields::MimeContentType) + "');";
+      break;
+    }
+    case LogFormat::Common:
+      [[fallthrough]];
+    case LogFormat::Combined: {
+      if (logFmt_ == LogFormat::Common) {
+        stmt_ += composeStmnt(scm_common_a, false);
+      } else {
+        stmt_ += composeStmnt(scm_combined_a, false);
+      }
+      stmt_.erase(stmt_.end() - 1);
+
+      std::string id_month_ =
+        "FROM_UNIXTIME(" +
+        std::to_string(unixTimestamp(getPartStr(Fields::LocalTime))) +
+        ",'%c'),";
+
+      stmt_ += ") VALUE (";
+      stmt_ += id_month_;
+      stmt_ += "'" + getPartStr(Fields::CliSrcIpAddr) + "',";
+      stmt_ += "'" + getPartStr(Fields::UserNameIdent) + "',";
+      stmt_ += "'" + getPartStr(Fields::UserName) + "',";
+      stmt_ += "'" + getPartStr(Fields::LocalTime) + "',";
+      stmt_ += "'" + getPartStr(Fields::ReqMethod) + "',";
+      stmt_ += "'" + getPartStr(Fields::ReqURL) + "',";
+      stmt_ += "'" + getPartStr(Fields::ReqProtoVersion) + "',";
+      stmt_ += std::to_string(getPartInt(Fields::HttpStatus)) + ",";
+      stmt_ += std::to_string(getPartInt(Fields::TotalSizeReply)) + ",";
+
+      if (logFmt_ == LogFormat::Common) {
+        stmt_ += "'" + getPartStr(Fields::ReqStatusHierStatus) + "');";
+      } else {
+        stmt_ += "'" + getPartStr(Fields::Referrer) + "',";
+        stmt_ += "'" + getPartStr(Fields::UserAgent) + "',";
+        stmt_ += "'" + getPartStr(Fields::HierStatusIpAddress) + "');";
+      }
+      break;
+    }
+    case LogFormat::Referrer: {
+      stmt_ += composeStmnt(scm_ref_a, false);
+      stmt_.erase(stmt_.end() - 1);
+
+      std::string id_month_ = "FROM_UNIXTIME(" +
+                              std::to_string(getPartUInt(Fields::Timestamp)) +
+                              ",'%c'),";
+
+      stmt_ += ") VALUE (";
+      stmt_ += id_month_;
+      stmt_ += std::to_string(getPartUInt(Fields::Timestamp)) + ",";
+      stmt_ += "'" + getPartStr(Fields::CliSrcIpAddr) + "',";
+      stmt_ += "'" + getPartStr(Fields::Referrer) + "',";
+      stmt_ += "'" + getPartStr(Fields::ReqURL) + "');";
+      break;
+    }
+    case LogFormat::UserAgent: {
+      stmt_ += composeStmnt(scm_uagent_a, false);
+      stmt_.erase(stmt_.end() - 1);
+
+      std::string id_month_ =
+        "FROM_UNIXTIME(" +
+        std::to_string(unixTimestamp(getPartStr(Fields::LocalTime))) +
+        ",'%c'),";
+
+      stmt_ += ") VALUE (";
+      stmt_ += id_month_;
+      stmt_ += "'" + getPartStr(Fields::CliSrcIpAddr) + "',";
+      stmt_ += "'" + getPartStr(Fields::LocalTime) + "',";
+      stmt_ += "'" + getPartStr(Fields::UserAgent) + "');";
+      break;
+    }
+    case LogFormat::Unknown: {
+      return;
+    }
+    default: {
+      return;
+    }
+  } // switch
+
+  try {
+    conn_ptr_->setAutoCommit(false);
+    std::shared_ptr<sql::PreparedStatement> prepstmnt_(
+      conn_ptr_->prepareStatement(sql::SQLString(stmt_)));
+
+    try {
+      prepstmnt_->execute();
+    } catch (sql::SQLException& e_) {
+      printSQLError(e_, __FUNCTION__, __LINE__);
+      rowsInserted_ = 0UL;
+    }
+    conn_ptr_->commit();
+    ++rowsInserted_;
+  } catch (sql::SQLException& e_) {
+    // Performs the rollback before aborting by the captured error.
+    conn_ptr_->rollback();
+    printSQLError(e_, __FUNCTION__, __LINE__);
+  }
+}
+
+/*!
+ * \internal
+ * \brief SLPDatabase::signalHandler
+ * \param signum_
+ */
+void
+SLPDatabase::signalHandler(const int signum_)
+{
+  std::cout << "\n\nSquidLogParser Library\nSLPDatabase Interrupt signal [ "
+            << (signum_ == 2 ? "Control-C" : std::to_string(signum_))
+            << " ] received.\n\n";
+  exit(signum_);
+}
+
+/*!
+ * \internal
+ * \brief composeStmnt
+ * \param t_ Array
+ * \param id_ true|false
+ * \return std::string
+ */
+template<typename T>
+std::string
+SLPDatabase::composeStmnt(T t_, bool id_)
+{
+  if constexpr (std::is_array<T[]>::value) {
+    std::string stmt_;
+    if (!id_) {
+      for (const auto& a : t_) {
+        if (a.first != "ID") {
+          stmt_ += a.first + ",";
+        }
+      }
+    } else {
+      for (const auto& a : t_) {
+        stmt_ += a.first + " " + a.second + ", ";
+      }
+    }
+    return stmt_;
+  }
+  return std::string();
+}
+
+/*!
+ * \internal
+ * \brief Create the table in the database.
+ *
+ * \note You must have permission to create tables in the database.
+ */
+void
+SLPDatabase::buildDDLCreateTbl(bool closeConn)
+{
+  std::string stmt_;
+  stmt_.reserve(1024);
+  stmt_ = "CREATE TABLE IF NOT EXISTS " + d_ptr_->tbname_ + " (";
+
+  switch (logFmt_) {
+    case LogFormat::Squid: {
+      stmt_ += composeStmnt(scm_squid_a);
+      break;
+    }
+    case LogFormat::Common: {
+      stmt_ += composeStmnt(scm_common_a);
+      break;
+    }
+    case LogFormat::Combined: {
+      stmt_ += composeStmnt(scm_combined_a);
+      break;
+    }
+    case LogFormat::Referrer: {
+      stmt_ += composeStmnt(scm_ref_a);
+      break;
+    }
+    case LogFormat::UserAgent: {
+      stmt_ += composeStmnt(scm_uagent_a);
+      break;
+    }
+    case LogFormat::Unknown:
+      [[fallthrough]];
+    default: {
+      return;
+    }
+  } // switch
+  stmt_ += " PRIMARY KEY (ID, ID_MONTH))";
+  stmt_ += " PARTITION BY HASH(ID_MONTH) PARTITIONS 12;";
+
+  try {
+    conn_ptr_->setAutoCommit(false);
+    std::shared_ptr<sql::PreparedStatement> prepstmnt_(
+      conn_ptr_->prepareStatement(stmt_));
+
+    try {
+      prepstmnt_->execute();
+    } catch (sql::SQLException& e_) {
+      printSQLError(e_, __FUNCTION__, __LINE__);
+      return;
+    }
+    conn_ptr_->commit();
+  } catch (sql::SQLException& e_) {
+    // Performs the rollback before aborting by the captured error.
+    conn_ptr_->rollback();
+    printSQLError(e_, __FUNCTION__, __LINE__);
+  }
+
+  if (closeConn) {
+    conn_ptr_->close();
+  }
+}
+
+#endif // DATABASE_EXTENSION
 
 } // namespace squidlogparser
