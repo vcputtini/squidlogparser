@@ -79,6 +79,7 @@ Small programs are provided with examples in the 'examples/' folder of this proj
         - explicit SLPDatabase(LogFormat format_, const std::string& dbase_, const std::string& host_, const int& port_, const std::string& user_, const std::string& pass_, const std::string& table_);
     - Public Members
         - insert()
+	    - dataIngest()
         - createTable(bool)
         - getRowsInserted()
         - resetRowsInserted()
