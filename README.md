@@ -14,11 +14,11 @@ I use it for my projects, even if these don't directly involve using the Qt(tm) 
 - MariaDB Connector C++ 1.0.1 or greater for <b>SLPDatabase</b> (Optional)<br>
 
 ### My Environment
-- Fedora 35<br>
-- clang (clang++) version 13.0.0<br>
-- g++ (GCC) 11.2.1 20220127 (Red Hat 11.2.1-9)<br>
+- Fedora 36<br>
+- clang version 14.0.0<br>
+- g++ (GCC) 12.1.1 20220507 (Red Hat 12.1.1-1)<br>
 (Under Oracle Linux 8 install gcc-devtool-10 or 8.6 install gcc-devtool-11)<br>
-- cmake version 3.22.0<br>
+- cmake version 3.22.x<br>
 - QtCreator 7.0.x (Code Style: clang-format -style=Mozilla)
 
 ### Examples
@@ -69,6 +69,11 @@ Small programs are provided with examples in the 'examples/' folder of this proj
     - countByReqMethod()
     - countByHttpCdodes()
     - HttpRequestCodes_V getHRCDetails()
+    - countByFiletype()
+    - getIndexByFiletype()
+    - getFTDetails()
+    - numFiletypes()
+    - totalFiles()
     - MethodText()
     - size()
     - clear()
