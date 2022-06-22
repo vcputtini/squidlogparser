@@ -62,6 +62,7 @@
 #include <algorithm>
 #include <arpa/inet.h> // inet_pton()
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <climits> // INT_MAX, LONG_MAX, UINT_MAX, ...
 #include <cmath>   // std::isless(), std::isgreater(), ...
@@ -103,7 +104,7 @@ using namespace tinyxml2; // mandatory
 /* ------------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------- */
-// Ativa a extensao para a classe XYZ
+// Activate the extension for class SLPDatabase
 #if defined(DATABASE_EXTENSION)
 #include <mariadb/conncpp.hpp>
 #endif
@@ -154,8 +155,8 @@ public:
   inline bool operator!=(const IPv4Addr& rhs_) const;
 
 private:
-  std::string str_ = {};
-  uint32_t num_ = 0UL;
+  std::string str_;
+  uint32_t num_;
 
   static void splitP(std::array<std::string, 4>& arr_, const std::string src_);
 };
@@ -168,14 +169,14 @@ private:
  * \note Based on: https://en.cppreference.com/w/cpp/utility/variant/visit
  */
 template<class... Ts>
-struct SquidLogParser_EXPORT overloadedP : Ts...
+struct overloadedP : Ts...
 {
   using Ts::operator()...;
 };
 
 template<class... Ts>
 overloadedP(Ts...) -> overloadedP<Ts...>;
-struct SquidLogParser_EXPORT Visitor
+struct Visitor
 {
 public:
   enum class TypeVar
@@ -311,6 +312,11 @@ struct SquidLogParser_EXPORT SquidLogData
   std::map<short, int> HttpCodesUniques_m;
 
   /*!
+   * \brief FiletypeUniques_m
+   */
+  std::map<std::string, int> FiletypeUniques_m;
+
+  /*!
    * \note There're several HTTP codes that are considered unofficial. Here
    * they will be treated as unknown. To see more details about these codes
    * visit: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
@@ -426,6 +432,10 @@ struct SquidLogParser_EXPORT SquidLogData
     MTOthers
   };
 
+  /*!
+   * \brief The Method_t struct: Specifications: RFC 7231 Session 4: Request
+   * Methods and RFC 5789 Session 2: Path Method.
+   */
   struct Method_t
   {
     const std::string_view sv_;
@@ -552,18 +562,46 @@ public:
 class HRCData
 {
 public:
-  explicit HRCData(const short c_, const std::string d_, const int s_)
-    : code_(std::move(c_))
-    , descr_(std::move(d_))
-    , score_(std::move(s_))
-  {}
-
   short getCode() const { return code_; };
   std::string getDescription() const { return descr_; };
   int getScore() const { return score_; };
 
 private:
+  explicit HRCData(const short c_, const std::string d_, const int s_)
+    : code_(std::move(c_))
+    , descr_(std::move(d_))
+    , score_(std::move(s_))
+  {
+  }
+
+private:
+  friend class SLPQuery;
+
   short code_ = {};
+  std::string descr_ = {};
+  int score_ = {};
+};
+
+/*!
+ * \brief Helper class for the new functions SLPQuery::getFTDetails(),
+ * SLPQuery::countFiletypes() and SLPQuery::totalFiles()
+ */
+class FiletypesData
+{
+public:
+  std::string getDescription() const { return descr_; };
+  int getScore() const { return score_; };
+
+private:
+  explicit FiletypesData(const std::string d_, const int s_)
+    : descr_(std::move(d_))
+    , score_(std::move(s_))
+  {
+  }
+
+private:
+  friend class SLPQuery;
+
   std::string descr_ = {};
   int score_ = {};
 };
@@ -611,8 +649,11 @@ public:
   // Test only. Will be removed soon.
   void printuniq()
   {
-    for (auto a : HttpCodesUniques_m) {
-      std::cout << "-> " << a.first << " : " << a.second << "\n";
+    int i = 0;
+    for (const auto& a : FiletypeUniques_m /*HttpCodesUniques_m*/) {
+      std::cout << "( " << i << " ) -> " << a.first << " : " << a.second
+                << "\n";
+      ++i;
     }
   }
 
@@ -625,6 +666,7 @@ protected:
   TString toLower(TString s_, TSize sz_ = 0);
 
   std::string strRight(const std::string src_, const char sep_) const;
+  std::string getFiletype(const std::string& url_) const;
 
   bool isMonth(const std::string&& s_);
   int monthToNumber(const std::string&& s_) const;
@@ -651,9 +693,9 @@ private:
 
 private:
   LogFormat logFmt_;
-  std::string rawLog_ = {};
-  std::string logFileName_ = {};
-  DataSet_Squid ds_squid_ = {};
+  std::string rawLog_;
+  std::string logFileName_;
+  DataSet_Squid ds_squid_;
 
   static const constexpr char* nmonths_[] = { "Jan", "Feb", "Mar", "Apr",
                                               "May", "Jun", "Jul", "Aug",
@@ -696,6 +738,7 @@ private:
 
   void removeExtraWhiteSpaces(const std::string& input_, std::string& output_);
 
+  static void signalHandler(const int signum_);
   void printException(const std::exception& e_,
                       const char* fname_,
                       const int line_);
@@ -749,6 +792,8 @@ public:
   void countByHttpCodes(const short&& code_ = 0);
   std::pair<int, std::string> getHRCScore(const short&& code_ = 0);
 
+  int countByFiletype(const std::string&& extension_ = std::string());
+
   inline std::string MethodText(MethodType mt_) const;
 
   size_t size() const;
@@ -760,6 +805,13 @@ public:
   // that contains the fields: Code, Description and Score.
   using HttpRequestCodes_V = std::vector<HRCData>;
   HttpRequestCodes_V getHRCDetails();
+
+  // Analogous to the above function
+  using Filetypes_V = std::vector<FiletypesData>;
+  Filetypes_V getFTDetails();
+  size_t getIndexByFiletype(const std::string&& extension_) const;
+  size_t countFiletypes() const;
+  int totalFiles() const;
 
 protected:
   std::multimap<DataKey, DataSet_Squid> mSubset_;
@@ -988,19 +1040,20 @@ public:
   void createTable(bool closeConnection = true);
 
 private:
+  LogFormat logFmt_;
+
   struct Data_t
   {
     std::string dbname_;
-    std::string tbname_;
     std::string hname_;
     int hport_;
     std::string uname_;
     std::string upass_;
+    std::string tbname_;
   };
   std::unique_ptr<Data_t> d_ptr_;
 
-  LogFormat logFmt_;
-  DBError dberror_ = DBError::DBE_SUCCESS;
+  DBError dberror_;
 
   /* Default table names */
   static constexpr std::string_view tbl_squid_ = "slp_log_squid";
@@ -1035,6 +1088,9 @@ private:
   void buildConnStr();
   void buidDMLInsertTbl();
   void buildDDLCreateTbl(bool closeConn = false);
+
+  // remover para producao
+  void EXEMPLO();
 
   static void signalHandler(const int signum_);
 

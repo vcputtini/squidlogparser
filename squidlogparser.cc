@@ -44,7 +44,7 @@ IPv4Addr::IPv4Addr()
   , num_(0UL){};
 
 IPv4Addr::IPv4Addr(const std::string addr_)
-  : str_(addr_){};
+  : str_(std::move(addr_)){};
 
 IPv4Addr::IPv4Addr(const char* addr_)
 {
@@ -210,13 +210,17 @@ Visitor::varType(var_t t_) const
 
 /* SquidLogParser ---------------------------------------------------------- */
 SquidLogParser::SquidLogParser(LogFormat log_fmt_)
-  : re_id_fmt_squid_(cp_id_fmt_squid_)
-  , re_id_fmt_common_(cp_id_fmt_common_)
-  , re_id_fmt_combined_(cp_id_fmt_combined_)
-  , re_id_fmt_referrer_(cp_id_fmt_referrer_)
-  , re_id_fmt_useragent_(cp_id_fmt_useragent_)
+  : logFmt_(std::move(log_fmt_))
+  , rawLog_({})
+  , logFileName_({})
+  , ds_squid_({})
+  , re_id_fmt_squid_(std::move(cp_id_fmt_squid_))
+  , re_id_fmt_common_(std::move(cp_id_fmt_common_))
+  , re_id_fmt_combined_(std::move(cp_id_fmt_combined_))
+  , re_id_fmt_referrer_(std::move(cp_id_fmt_referrer_))
+  , re_id_fmt_useragent_(std::move(cp_id_fmt_useragent_))
 {
-  logFmt_ = log_fmt_;
+  std::signal(SIGINT, signalHandler);
 };
 
 /*!
@@ -543,6 +547,59 @@ SquidLogParser::strRight(const std::string src_, const char sep_) const
   }
   return std::string();
 }
+
+/*!
+ * \internal
+ * \brief Returns the filename extension, if there is one, in the URL passed as
+ * an argument. Only the HTTP and HTTPS protocols are valid.
+ *
+ * \param url_ URL
+ *
+ * \return Returns the extension along with the period, otherwise it returns an
+ * empty string.
+ *
+ * Examples of valid extensions: .xml .js .jpeg .woff .woff2
+ *
+ * Examples of invalid extensions: Any extension that
+ * does not consist exclusively of numbers or alphabetic characters.
+ * e.g: .gif%3Fpartner%3Dadobe%26partner_uid%3D$%7BDD_UUID%7D
+ */
+std::string
+SquidLogParser::getFiletype(const std::string& url_) const
+{
+  namespace fs = std::filesystem;
+
+  if (const size_t f_ = std::string_view{ url_ }.find("http", 0, 4);
+      f_ != std::string::npos) {
+    fs::path path_(url_);
+
+    std::string extension_(path_.extension());
+
+    if (!extension_.empty()) {
+
+      if (std::any_of(extension_.cbegin(),
+                      extension_.cend(),
+                      [](unsigned char c) -> bool {
+                        if (c == '.' || c == '?') {
+                          return false;
+                        }
+                        return std::ispunct(c);
+                      })) {
+        return std::string();
+      }
+
+      const auto size_ = extension_.size() - 1;
+
+      if (!std::isalpha(extension_[size_]) || std::isdigit(extension_[size_])) {
+        extension_.erase(--extension_.end());
+        return extension_;
+      }
+      return extension_;
+    }
+  }
+  return std::string();
+}
+
 /*!
  * \internal
  * \brief Returns true or false if month name is corret
@@ -975,6 +1032,11 @@ SquidLogParser::parserSquid()
       { std::move(std::stoi(strRight(ds_squid_.reqStatusHierStatus, '/'))),
         0 });
 
+    // stores unique file extension for later score.
+    if (const std::string ext_ = getFiletype(ds_squid_.reqURL); !ext_.empty()) {
+      FiletypeUniques_m.insert({ ext_, 0 });
+    }
+
 #ifdef DEBUG_PARSER_SQUID
     std::cout << "ds_squid :\n";
     std::cout << ds_squid_.timeStamp << "\n"
@@ -1043,6 +1105,11 @@ SquidLogParser::parserCommon()
 
     // stores unique http request codes for later score.
     HttpCodesUniques_m.insert({ std::move(std::stoi(match[8])), 0 });
+
+    // stores unique file extension for later score.
+    if (const std::string ext_ = getFiletype(ds_squid_.reqURL); !ext_.empty()) {
+      FiletypeUniques_m.insert({ ext_, 0 });
+    }
 
 #ifdef DEBUG_PARSER_COMMON
     std::cout << "ds_common :\n";
@@ -1116,6 +1183,11 @@ SquidLogParser::parserCombined()
     // stores unique http request codes for later score.
     HttpCodesUniques_m.insert({ std::move(std::stoi(match[8])), 0 });
 
+    // stores unique file extension for later score.
+    if (const std::string ext_ = getFiletype(ds_squid_.reqURL); !ext_.empty()) {
+      FiletypeUniques_m.insert({ ext_, 0 });
+    }
+
 #ifdef DEBUG_PARSER_COMBINED
     std::cout << "ds_combined :\n";
     std::cout << ds_squid_.cliSrcIpAddr << "\n"
@@ -1178,6 +1250,11 @@ SquidLogParser::parserReferrer()
     ds_squid_.cliSrcIpAddr = std::move(IPv4Addr::iptol(match[2]));
     ds_squid_.referrer = std::move(match[3]);
     ds_squid_.reqURL = std::move(match[4]);
+
+    // stores unique file extension for later score.
+    if (const std::string ext_ = getFiletype(ds_squid_.reqURL); !ext_.empty()) {
+      FiletypeUniques_m.insert({ ext_, 0 });
+    }
 
 #ifdef DEBUG_PARSER_REFERRER
     std::cout << "ds_referrer :\n";
@@ -1279,6 +1356,20 @@ SquidLogParser::removeExtraWhiteSpaces(const std::string& input_,
 
 /*!
  * \internal
+ * \brief SLPDatabase::signalHandler
+ * \param signum_
+ */
+void
+SquidLogParser::signalHandler(const int signum_)
+{
+  std::cout << "\n\nSquidLogParser Library Interrupt signal [ "
+            << (signum_ == 2 ? "Control-C" : std::to_string(signum_))
+            << " ] received.\n\n";
+  exit(signum_);
+}
+
+/*!
+ * \internal
  * \brief Prints formatted exception messages.
  * \param e_
  * \param fname_
@@ -1301,10 +1392,10 @@ SquidLogParser::printException(const std::exception& e_,
 SLPQuery::SLPQuery(SquidLogParser* obj_)
   : SquidLogParser(*obj_)
   , mSubset_({})
+  , logFmt_(getFormat())
   , slpError_(SLPError::SLP_SUCCESS)
   , info_t({})
 {
-  logFmt_ = getFormat();
 }
 
 /*!
@@ -1603,8 +1694,8 @@ SLPQuery::countByReqMethod() const
 }
 
 /*!
- * \brief processes the count by Http Request Code. If no value is informed, it
- * will process all possible codes, otherwise only the informed code.
+ * \brief Processes the count by Http Request Code. If no value is informed,
+ * it will process all possible codes, otherwise only the informed code.
  *
  * \param code A valid HRC code.
  *
@@ -1716,15 +1807,141 @@ SLPQuery::getHRCDetails()
                   std::string descr_;
                   if (const auto& it_ = HttpCodesText_m.find(d_.first);
                       it_ != HttpCodesText_m.end()) {
-                    descr_ = it_->second;
-                  } else {
-                    descr_ = "Unknown"; // for unofficial codes or error
+                    if (!it_->second.empty()) {
+                      hrc_v_.push_back(
+                        HRCData(d_.first, it_->second.data(), d_.second));
+                    }
                   }
-                  hrc_v_.push_back(HRCData(d_.first, descr_, d_.second));
                 });
 
   return hrc_v_;
 }
+
+/*!
+ * \brief Processes the count by file type. If no value is informed, it
+ * will process all possible extensions found, otherwise only the informed
+ * file extension.
+ *
+ * \param A file extension. E.g: .html .css .jpeg and so on.
+ *
+ * \return integer The count for a given file extension. Or zero if no
+ * extension is provided.
+ *
+ * \note The result of the process is stored in the map that is already
+ * populated with the extensions found in the log file named
+ * FiletypeUniques_m.
+ */
+int
+SLPQuery::countByFiletype(const std::string&& extension_)
+{
+  if (FiletypeUniques_m.size() > 0) {
+    // set scores to zero.
+    for (const auto& a : FiletypeUniques_m) {
+      FiletypeUniques_m.insert_or_assign(a.first, 0);
+    }
+
+    std::for_each(
+      mSubset_.cbegin(),
+      mSubset_.cend(),
+      [&extension_, this](const std::pair<DataKey, DataSet_Squid>& d_) {
+        const std::string ext_ = getFiletype(std::move(d_.second.reqURL));
+
+        if (extension_.empty()) { // all
+          if (const auto& it_ = FiletypeUniques_m.find(ext_);
+              it_ != FiletypeUniques_m.end()) {
+            FiletypeUniques_m[ext_] += 1;
+          }
+        } else if (ext_ == extension_) {
+          if (const auto& it_ = FiletypeUniques_m.find(ext_);
+              it_ != FiletypeUniques_m.end()) {
+            FiletypeUniques_m[ext_] += 1;
+          }
+        }
+      });
+    return (extension_.empty() ? FiletypeUniques_m.size()
+                               : FiletypeUniques_m[extension_]);
+  }
+  return 0;
+}
+
+/*!
+ * \brief SLPQuery::getFTDetails
+ *
+ * \return SLPQuery::Filetypes_V
+ *
+ * \code
+ *
+ * (...)
+ * SLPQuery::Filetypes_V fsvec_;
+ * std::cout << "Total unique extensions = " << qry->countFiletypes() <<
+ * "\n\n"; std::cout << "Total files  = " << qry->totalFiles() << "\n\n";
+ * fsvec_ = qry->getFTDetails();
+ * for (const auto& it_ : fsvec_) {
+ *   std::cout << it_.getDescription() << " : "
+ *             << it_.getScore() << "\n";
+ * }
+ * (...)
+ * \endcode
+ */
+SLPQuery::Filetypes_V
+SLPQuery::getFTDetails()
+{
+  Filetypes_V ft_v_;
+  std::for_each(FiletypeUniques_m.cbegin(),
+                FiletypeUniques_m.cend(),
+                [&ft_v_, this](const std::pair<std::string, int>& d_) {
+                  if (const auto& it_ = FiletypeUniques_m.find(d_.first);
+                      it_ != FiletypeUniques_m.end()) {
+                    if (!it_->first.empty()) {
+                      ft_v_.push_back(FiletypesData(it_->first, d_.second));
+                    }
+                  }
+                });
+
+  return ft_v_;
+}
+
+size_t
+SLPQuery::getIndexByFiletype(const std::string&& extension_) const
+{
+  if (const auto& it_ = FiletypeUniques_m.find(extension_);
+      it_ != FiletypeUniques_m.end()) {
+    return std::distance(FiletypeUniques_m.begin(), it_);
+  }
+  return 0;
+}
+
+/*!
+ * \brief Returns the total number of unique file types found.
+ *
+ * \return size_t
+ *
+ * \example .xml 44; .css 100
+ *
+ */
+size_t
+SLPQuery::countFiletypes() const
+{
+  return FiletypeUniques_m.size();
+};
+
+/*!
+ * \brief Returns the sum of all file types found.
+ *
+ * \return int
+ */
+int
+SLPQuery::totalFiles() const
+{
+  return std::accumulate(FiletypeUniques_m.cbegin(),
+                         FiletypeUniques_m.cend(),
+                         0,
+                         [](int sum_, const std::pair<std::string, int>& d_) {
+                           return sum_ + d_.second;
+                         }
+
+  );
+};
 
 /*!
  * \brief Given an enumerator as an argument, returns the corresponding text.
@@ -1998,7 +2215,8 @@ SLPRawToXML::SLPRawToXML(LogFormat fmt_, size_t count_)
   : slpError_(SLPError::SLP_SUCCESS)
   , logFmt_(std::move(fmt_))
   , cnt_(std::move(count_))
-{}
+{
+}
 
 /*!
  * \internal
@@ -2265,8 +2483,13 @@ SLPDatabase::SLPDatabase(LogFormat format_,
                          const std::string& user_,
                          const std::string& pass_,
                          const std::string& table_)
-  : d_ptr_(std::make_unique<Data_t>())
-  , logFmt_(format_)
+  : logFmt_(std::move(format_))
+  , d_ptr_(std::make_unique<Data_t>(Data_t{ std::move(dbase_),
+                                            std::move(host_),
+                                            std::move(port_),
+                                            std::move(user_),
+                                            std::move(pass_),
+                                            std::move(table_) }))
   , rowsInserted_(0UL)
   , driver(sql::mariadb::get_driver_instance())
   , strConn_("tcp://") /* strConn_("jdbc:mariadb://") */
@@ -2274,71 +2497,64 @@ SLPDatabase::SLPDatabase(LogFormat format_,
 {
   std::signal(SIGINT, signalHandler);
 
-  if (!dbase_.empty()) {
-    d_ptr_->dbname_ = std::move(dbase_);
+  if (logFmt_ == LogFormat::Unknown) {
+    dberror_ = DBError::DBE_UNKNOWN;
+    return;
+  }
 
-    if (!host_.empty()) {
-      d_ptr_->hname_ = std::move(host_);
-    } else {
+  if (!d_ptr_->dbname_.empty()) {
+
+    if (d_ptr_->hname_.empty()) {
       dberror_ = DBError::DBE_ERR_INVALID_HNAME;
       return;
     }
 
-    d_ptr_->hport_ = ((port_ <= 0) || (port_ > 65535) ? std::move(dbDfltPort_)
-                                                      : std::move(port_));
-
-    if (!user_.empty()) {
-      d_ptr_->uname_ = std::move(user_);
-    } else {
+    if (d_ptr_->uname_.empty()) {
       dberror_ = DBError::DBE_ERR_INVALID_UNAME;
       return;
     }
-    if (!pass_.empty()) {
-      d_ptr_->upass_ = std::move(pass_);
-    } else {
+
+    if (d_ptr_->upass_.empty()) {
       dberror_ = DBError::DBE_ERR_INVALID_UPASS;
       return;
     }
 
-    switch (logFmt_) {
-      case LogFormat::Squid: {
-        d_ptr_->tbname_ =
-          (table_.empty() ? std::move(tbl_squid_) : std::move(table_));
-        break;
-      }
-      case LogFormat::Common: {
-        d_ptr_->tbname_ =
-          (table_.empty() ? std::move(tbl_common_) : std::move(table_));
-        break;
-      }
-      case LogFormat::Combined: {
-        d_ptr_->tbname_ =
-          (table_.empty() ? std::move(tbl_combined_) : std::move(table_));
-        break;
-      }
-      case LogFormat::Referrer: {
-        d_ptr_->tbname_ =
-          (table_.empty() ? std::move(tbl_referrer_) : std::move(table_));
-        break;
-      }
-      case LogFormat::UserAgent: {
-        d_ptr_->tbname_ =
-          (table_.empty() ? std::move(tbl_useragent_) : std::move(table_));
-        break;
-      }
-      default: {
-        dberror_ = DBError::DBE_ERR_LOGFORMAT;
-        return;
-      }
+    if (d_ptr_->hport_ <= 0) {
+      d_ptr_->hport_ = std::move(dbDfltPort_);
+    }
+
+    if (logFmt_ == LogFormat::Squid && d_ptr_->tbname_.empty()) {
+      d_ptr_->tbname_ = std::move(tbl_squid_);
+      return;
+    }
+
+    if (logFmt_ == LogFormat::Common && d_ptr_->tbname_.empty()) {
+      d_ptr_->tbname_ = std::move(tbl_common_);
+      return;
+    }
+
+    if (logFmt_ == LogFormat::Combined && d_ptr_->tbname_.empty()) {
+      d_ptr_->tbname_ = std::move(tbl_combined_);
+      return;
+    }
+
+    if (logFmt_ == LogFormat::Referrer && d_ptr_->tbname_.empty()) {
+      d_ptr_->tbname_ = std::move(tbl_referrer_);
+      return;
+    }
+
+    if (logFmt_ == LogFormat::UserAgent && d_ptr_->tbname_.empty()) {
+      d_ptr_->tbname_ = std::move(tbl_useragent_);
+      return;
     }
 
     sqlProps_ = { { "user", d_ptr_->uname_ }, { "password", d_ptr_->upass_ } };
-
     buildConnStr();
     conn_ptr_.reset(connection());
 
-  } // dbname_
-  dberror_ = DBError::DBE_SUCCESS;
+  } else {
+    dberror_ = DBError::DBE_ERR_INVALID_DBNAME;
+  }
 }
 
 /*!
@@ -2426,8 +2642,8 @@ SLPDatabase::insert(const std::string& raw_log_)
 }
 
 /*!
- * \brief Waits for a new entry in the desired log file, and when this entry is
- * recorded by Squid-cache(tm) it is inserted into the database table.
+ * \brief Waits for a new entry in the desired log file, and when this entry
+ * is recorded by Squid-cache(tm) it is inserted into the database table.
  *
  * \param log_fname_
  *
@@ -2569,8 +2785,8 @@ SLPDatabase::printSQLError(sql::SQLException& e_,
  * \brief Try to connect to the database.
  * \return connection pointer.
  *
- * \note At this moment we consider it better that the system is aborted when it
- * catches an error in the operations with the database.
+ * \note At this moment we consider it better that the system is aborted when
+ * it catches an error in the operations with the database.
  */
 sql::Connection*
 SLPDatabase::connection()
@@ -2596,6 +2812,8 @@ SLPDatabase::buildConnStr()
   strConn_.append(std::to_string(d_ptr_->hport_).c_str());
   strConn_.append("/");
   strConn_.append(d_ptr_->dbname_.c_str());
+
+  std::cout << strConn_ << "\n";
 }
 
 /*!
@@ -2706,6 +2924,9 @@ SLPDatabase::buidDMLInsertTbl()
     }
   } // switch
 
+  std::cout << "SQL = " << stmt_ << "\n";
+  return;
+
   try {
     conn_ptr_->setAutoCommit(false);
     std::shared_ptr<sql::PreparedStatement> prepstmnt_(
@@ -2811,6 +3032,9 @@ SLPDatabase::buildDDLCreateTbl(bool closeConn)
   } // switch
   stmt_ += " PRIMARY KEY (ID, ID_MONTH))";
   stmt_ += " PARTITION BY HASH(ID_MONTH) PARTITIONS 12;";
+
+  std::cout << stmt_ << "\n";
+  return;
 
   try {
     conn_ptr_->setAutoCommit(false);
